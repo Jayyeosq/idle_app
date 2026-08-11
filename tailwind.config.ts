@@ -5,19 +5,22 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#14171F",
-        "ink-soft": "#1D212C",
-        brass: "#C89B3C",
-        "brass-soft": "#E4C778",
-        sage: "#7C9885",
-        paper: "#EDE7DA",
-        rust: "#B5533C",
-        mist: "#9AA5B1",
+        paper: "#FAFAFA",
+        card: "#FFFFFF",
+        ink: "#171717",
+        "ink-soft": "#5C5C5C",
+        line: "#E8E8E8",
+        mist: "#777777",
+        sage: "#4F6553",
+        "sage-tint": "#EEF3EF",
+        rust: "#B23A2E",
+        brass: "#171717",
+        "brass-soft": "#333333",
       },
       fontFamily: {
-        display: ["var(--font-fraunces)", "serif"],
-        body: ["var(--font-plex-sans)", "sans-serif"],
-        mono: ["var(--font-plex-mono)", "monospace"],
+        display: ["var(--font-dm-serif)", "serif"],
+        body: ["var(--font-dm-sans)", "sans-serif"],
+        mono: ["var(--font-dm-sans)", "sans-serif"],
       },
       keyframes: {
         "dial-idle": {

@@ -112,82 +112,120 @@ export default function Dashboard({ email }: { email: string }) {
   }
 
   const thinking = status === "locating" || status === "thinking" || manualLoading;
+  const initial = email.charAt(0).toUpperCase();
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
+
+  const ctaLabel =
+    status === "locating"
+      ? "Finding you…"
+      : status === "thinking"
+        ? "Thinking…"
+        : recs.length
+          ? "Find something else"
+          : "Find something to do";
 
   return (
-    <main className="min-h-screen px-6 py-12 max-w-3xl mx-auto flex flex-col items-center">
-      <div className="w-full flex justify-between items-center mb-12">
-        <span className="font-display text-2xl tracking-tight">IDLE</span>
+    <main className="max-w-[1320px] mx-auto px-6 sm:px-8 pb-16">
+      <header className="h-[86px] flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <Dial size={22} spinning={thinking} />
+          <span className="font-medium text-lg tracking-wide">IDLE</span>
+        </div>
         <div className="flex items-center gap-4">
-          <span className="font-mono text-xs text-mist hidden sm:inline">{email}</span>
+          <span className="text-sm text-mist hidden sm:inline">{email}</span>
           <button
             onClick={logout}
-            className="text-sm text-mist hover:text-paper underline underline-offset-4"
+            className="text-sm text-mist hover:text-ink underline underline-offset-4"
           >
             Log out
           </button>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={findSomething}
-        disabled={thinking}
-        className="panel-plate rounded-2xl px-14 py-10 flex flex-col items-center gap-4 group transition-transform hover:-translate-y-0.5 disabled:hover:translate-y-0"
-      >
-        <Dial size={120} spinning={thinking} />
-        <span className="font-mono text-sm text-brass group-hover:text-brass-soft transition-colors tracking-wide">
-          {status === "locating"
-            ? "finding you..."
-            : status === "thinking"
-              ? "thinking..."
-              : recs.length
-                ? "find something else"
-                : "find something to do"}
-        </span>
-      </button>
-
-      {(location || weather) && (
-        <p className="font-mono text-xs text-mist mt-6 text-center">
-          {location}
-          {weather ? ` · ${Math.round(weather.tempC)}°C, ${weather.condition}` : ""}
-        </p>
-      )}
-
-      {error && (
-        <p role="alert" className="text-sm text-rust mt-6 text-center max-w-sm">
-          {error}
-        </p>
-      )}
-
-      {needsManualLocation && (
-        <form onSubmit={useManualLocation} className="w-full max-w-sm mt-4 flex gap-2">
-          <input
-            type="text"
-            value={manualQuery}
-            onChange={(e) => setManualQuery(e.target.value)}
-            placeholder="Enter a city or address..."
-            disabled={manualLoading}
-            className="flex-1 rounded-md bg-ink-soft border border-white/10 px-3.5 py-2 text-sm text-paper placeholder:text-mist/50 focus:border-brass outline-none transition-colors disabled:opacity-60"
-          />
-          <button
-            type="submit"
-            disabled={manualLoading || !manualQuery.trim()}
-            className="btn-brass rounded-md text-ink text-sm font-medium px-4 py-2 disabled:opacity-60"
+          <div
+            aria-hidden="true"
+            className="w-10 h-10 rounded-full bg-ink text-paper flex items-center justify-center text-sm font-medium"
           >
-            {manualLoading ? "..." : "Go"}
-          </button>
-        </form>
-      )}
+            {initial}
+          </div>
+        </div>
+      </header>
 
-      <FilterPanel value={filters} onChange={setFilters} disabled={thinking} />
+      <section className="grid lg:grid-cols-[1.1fr_0.9fr] gap-5">
+        <div className="panel-plate px-8 py-14 sm:px-12 sm:py-16 flex flex-col justify-center">
+          <p className="text-xs uppercase tracking-[0.16em] text-mist mb-3">{today}</p>
+          <h1 className="font-display text-5xl sm:text-[60px] leading-[0.98] tracking-tight max-w-xl">
+            Your day, thoughtfully picked.
+          </h1>
+          <p className="text-base leading-relaxed max-w-md mt-5 text-ink-soft">
+            A few things worth leaving home for, shaped around your time, location and taste.
+          </p>
+          <button
+            type="button"
+            onClick={findSomething}
+            disabled={thinking}
+            className="btn-brass rounded-full px-6 py-3.5 font-medium text-sm mt-8 w-fit disabled:opacity-60"
+          >
+            {ctaLabel} →
+          </button>
+
+          {error && (
+            <p role="alert" className="text-sm text-rust mt-5 max-w-sm">
+              {error}
+            </p>
+          )}
+
+          {needsManualLocation && (
+            <form onSubmit={useManualLocation} className="max-w-sm mt-4 flex gap-2">
+              <input
+                type="text"
+                value={manualQuery}
+                onChange={(e) => setManualQuery(e.target.value)}
+                placeholder="Enter a city or address..."
+                disabled={manualLoading}
+                className="flex-1 rounded-md bg-card border border-ink/10 px-3.5 py-2 text-sm text-ink placeholder:text-mist/60 focus:border-ink outline-none transition-colors disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={manualLoading || !manualQuery.trim()}
+                className="btn-brass rounded-md text-sm px-4 py-2 disabled:opacity-60"
+              >
+                {manualLoading ? "…" : "Go"}
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="relative rounded-[24px] overflow-hidden min-h-[280px] lg:min-h-0 bg-[#f0f0f0]">
+          <img
+            src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"
+            alt=""
+            className="w-full h-full object-cover absolute inset-0"
+          />
+          {weather && (
+            <p className="absolute left-4 top-4 text-xs bg-card/90 backdrop-blur-sm rounded-full px-3.5 py-2 text-ink-soft">
+              {Math.round(weather.tempC)}°C · {weather.condition}
+              {location ? ` · ${location}` : ""}
+            </p>
+          )}
+        </div>
+      </section>
 
       {recs.length > 0 && (
-        <div className="w-full grid sm:grid-cols-2 gap-4 mt-12">
-          {recs.map((rec) => (
-            <RecommendationCard key={rec.id} rec={rec} />
-          ))}
-        </div>
+        <section className="pt-14">
+          <div className="flex justify-between items-end mb-5">
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-mist mb-2">For you</p>
+              <h2 className="font-display text-4xl">Near enough to say yes.</h2>
+            </div>
+            <span className="text-sm text-mist hidden sm:inline">Curated from your preferences</span>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {recs.map((rec) => (
+              <RecommendationCard key={rec.id} rec={rec} />
+            ))}
+          </div>
+        </section>
       )}
+
+      <FilterPanel value={filters} onChange={setFilters} disabled={thinking} onSubmit={findSomething} />
     </main>
   );
 }

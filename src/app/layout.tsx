@@ -1,30 +1,22 @@
 import type { Metadata } from "next";
-import { Fraunces, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import { DM_Sans, DM_Serif_Display } from "next/font/google";
 import "./globals.css";
 
-// These three feed the --font-fraunces / --font-plex-sans / --font-plex-mono
-// CSS variables that tailwind.config.ts maps to font-display / font-body /
-// font-mono. Without this, those classes silently fall back to generic
-// serif/sans-serif/monospace.
-const fraunces = Fraunces({
+// Feeds --font-dm-sans / --font-dm-serif, mapped in tailwind.config.ts to
+// font-body / font-display. font-mono is also pointed at DM Sans (see
+// tailwind.config.ts) — this concept uses one sans family throughout,
+// including uppercase tracked meta text, rather than a dedicated mono face.
+const dmSans = DM_Sans({
   subsets: ["latin"],
-  variable: "--font-fraunces",
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
-  display: "swap",
-});
-
-const plexSans = IBM_Plex_Sans({
-  subsets: ["latin"],
-  variable: "--font-plex-sans",
+  variable: "--font-dm-sans",
   weight: ["400", "500", "600"],
   display: "swap",
 });
 
-const plexMono = IBM_Plex_Mono({
+const dmSerif = DM_Serif_Display({
   subsets: ["latin"],
-  variable: "--font-plex-mono",
-  weight: ["400", "500"],
+  variable: "--font-dm-serif",
+  weight: ["400"],
   display: "swap",
 });
 
@@ -35,8 +27,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${plexSans.variable} ${plexMono.variable}`}>
-      <body className="font-body bg-ink text-paper min-h-screen antialiased">{children}</body>
+    <html lang="en" className={`${dmSans.variable} ${dmSerif.variable}`}>
+      <body className="font-body bg-paper text-ink min-h-screen antialiased">{children}</body>
     </html>
   );
 }

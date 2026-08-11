@@ -64,8 +64,8 @@ export default function OnboardingForm() {
                 aria-pressed={active}
                 className={`px-3.5 py-1.5 rounded-full text-sm border transition-colors ${
                   active
-                    ? "bg-brass border-brass text-ink"
-                    : "border-white/15 text-paper/85 hover:border-brass/60"
+                    ? "bg-ink border-ink text-paper"
+                    : "border-ink/15 text-ink/80 hover:border-brass/60"
                 }`}
               >
                 {tag}
@@ -86,8 +86,8 @@ export default function OnboardingForm() {
               aria-pressed={budget === b}
               className={`px-4 py-1.5 rounded-md text-sm border font-mono transition-colors ${
                 budget === b
-                  ? "bg-sage border-sage text-ink"
-                  : "border-white/15 text-paper/85 hover:border-sage/60"
+                  ? "bg-sage-tint border-sage text-sage"
+                  : "border-ink/15 text-ink/80 hover:border-sage/60"
               }`}
             >
               {b}
@@ -107,8 +107,8 @@ export default function OnboardingForm() {
               aria-pressed={pace === p}
               className={`px-4 py-1.5 rounded-md text-sm border capitalize transition-colors ${
                 pace === p
-                  ? "bg-sage border-sage text-ink"
-                  : "border-white/15 text-paper/85 hover:border-sage/60"
+                  ? "bg-sage-tint border-sage text-sage"
+                  : "border-ink/15 text-ink/80 hover:border-sage/60"
               }`}
             >
               {p}
@@ -142,7 +142,7 @@ export default function OnboardingForm() {
           value={dietary}
           onChange={(e) => setDietary(e.target.value)}
           placeholder="vegetarian, no shellfish, halal..."
-          className="w-full rounded-md bg-ink-soft border border-white/10 px-3.5 py-2.5 text-paper placeholder:text-mist/50 focus:border-brass outline-none transition-colors"
+          className="w-full rounded-md bg-card border border-ink/10 px-3.5 py-2.5 text-ink placeholder:text-mist/50 focus:border-brass outline-none transition-colors"
         />
       </fieldset>
 
@@ -156,7 +156,7 @@ export default function OnboardingForm() {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="e.g. I hate crowds, I love a good rooftop, I'm usually free after 6pm..."
-          className="w-full rounded-md bg-ink-soft border border-white/10 px-3.5 py-2.5 text-paper placeholder:text-mist/50 focus:border-brass outline-none transition-colors resize-none"
+          className="w-full rounded-md bg-card border border-ink/10 px-3.5 py-2.5 text-ink placeholder:text-mist/50 focus:border-brass outline-none transition-colors resize-none"
         />
       </fieldset>
 
@@ -169,7 +169,7 @@ export default function OnboardingForm() {
       <button
         type="submit"
         disabled={loading}
-        className="btn-brass w-full rounded-md text-ink font-medium py-3 disabled:opacity-60"
+        className="btn-brass w-full rounded-full font-medium py-3 disabled:opacity-60"
       >
         {loading ? "Saving..." : "Start IDLE-ing"}
       </button>

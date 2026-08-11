@@ -40,7 +40,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-5">
       <div>
-        <label htmlFor="email" className="block text-sm text-mist mb-1.5 font-mono">
+        <label htmlFor="email" className="block text-xs uppercase tracking-wide text-mist mb-2">
           email
         </label>
         <input
@@ -50,13 +50,13 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-md bg-ink-soft border border-white/10 px-3.5 py-2.5 text-paper placeholder:text-mist/50 focus:border-brass outline-none transition-colors"
+          className="w-full rounded-md bg-card border border-ink/10 px-3.5 py-2.5 text-ink placeholder:text-mist/50 focus:border-brass outline-none transition-colors"
           placeholder="you@example.com"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm text-mist mb-1.5 font-mono">
+        <label htmlFor="password" className="block text-xs uppercase tracking-wide text-mist mb-2">
           password
         </label>
         <input
@@ -67,7 +67,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           autoComplete={mode === "signup" ? "new-password" : "current-password"}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-md bg-ink-soft border border-white/10 px-3.5 py-2.5 text-paper placeholder:text-mist/50 focus:border-brass outline-none transition-colors"
+          className="w-full rounded-md bg-card border border-ink/10 px-3.5 py-2.5 text-ink placeholder:text-mist/50 focus:border-brass outline-none transition-colors"
           placeholder={mode === "signup" ? "at least 8 characters" : "••••••••"}
         />
       </div>
@@ -81,7 +81,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
       <button
         type="submit"
         disabled={loading}
-        className="btn-brass w-full rounded-md text-ink font-medium py-2.5 disabled:opacity-60"
+        className="btn-brass w-full rounded-full font-medium py-3 disabled:opacity-60"
       >
         {loading ? "Working..." : mode === "signup" ? "Create account" : "Log in"}
       </button>
