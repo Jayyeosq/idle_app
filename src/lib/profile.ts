@@ -13,6 +13,53 @@ export async function readProfile(userId: string): Promise<string | null> {
   return readTextFile(profileFilePath(userId));
 }
 
+/**
+ * Parses the current preferences back out of the Preferences markdown
+ * block. Kept in sync with createProfile/updatePreferences below — both
+ * write a fixed label format ("- **Interests:** ..." etc.) specifically so
+ * this stays a reliable round-trip, without needing a second, separate
+ * structured store that could drift from the markdown file. The markdown
+ * remains the single source of truth per the project's storage approach.
+ */
+export function parsePreferences(markdown: string): OnboardingData | null {
+  const blockMatch = markdown.match(/## Preferences([\s\S]*?)(?=\n## History|$)/);
+  if (!blockMatch) return null;
+  const block = blockMatch[1];
+
+  const get = (label: string): string | null => {
+    const m = block.match(new RegExp(`\\*\\*${label}:\\*\\*\\s*(.+)`));
+    return m ? m[1].trim() : null;
+  };
+
+  const budgetRaw = get("Budget");
+  const paceRaw = get("Pace");
+  if (!budgetRaw || !paceRaw) return null;
+
+  const interestsRaw = get("Interests");
+  const dietaryRaw = get("Dietary");
+  const notesRaw = get("Notes");
+  const radiusRaw = get("Travel radius");
+
+  const isEmpty = (v: string | null) => !v || v === "(none given)";
+
+  const budget: OnboardingData["budget"] = (["$", "$$", "$$$"] as const).includes(budgetRaw as any)
+    ? (budgetRaw as OnboardingData["budget"])
+    : "$$";
+  const pace: OnboardingData["pace"] = (["chill", "balanced", "packed"] as const).includes(paceRaw as any)
+    ? (paceRaw as OnboardingData["pace"])
+    : "balanced";
+  const travelRadiusKm = radiusRaw ? parseInt(radiusRaw, 10) : 5;
+
+  return {
+    interests: isEmpty(interestsRaw) ? [] : interestsRaw!.split(",").map((s) => s.trim()),
+    budget,
+    pace,
+    dietary: isEmpty(dietaryRaw) ? "" : dietaryRaw!,
+    travelRadiusKm: Number.isFinite(travelRadiusKm) ? travelRadiusKm : 5,
+    notes: isEmpty(notesRaw) ? "" : notesRaw!,
+  };
+}
+
 export async function createProfile(
   userId: string,
   email: string,

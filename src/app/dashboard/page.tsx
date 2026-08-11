@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { findUserById } from "@/lib/users";
+import { readProfile, parsePreferences } from "@/lib/profile";
 import Dashboard from "@/components/Dashboard";
 
 export default async function DashboardPage() {
@@ -11,5 +12,8 @@ export default async function DashboardPage() {
   if (!user) redirect("/login");
   if (!user.onboarded) redirect("/onboarding");
 
-  return <Dashboard email={user.email} />;
+  const profileMarkdown = await readProfile(session.userId);
+  const preferences = profileMarkdown ? parsePreferences(profileMarkdown) : null;
+
+  return <Dashboard email={user.email} preferences={preferences} />;
 }

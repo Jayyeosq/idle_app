@@ -1,16 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Dial from "@/components/Dial";
 import RecommendationCard from "@/components/RecommendationCard";
 import FilterPanel from "@/components/FilterPanel";
-import type { Recommendation, WeatherInfo, RecommendationFilters } from "@/lib/types";
+import ProfileMenu from "@/components/ProfileMenu";
+import type { Recommendation, WeatherInfo, RecommendationFilters, OnboardingData } from "@/lib/types";
 
 type Status = "idle" | "locating" | "thinking" | "error";
 
-export default function Dashboard({ email }: { email: string }) {
-  const router = useRouter();
+export default function Dashboard({
+  email,
+  preferences,
+}: {
+  email: string;
+  preferences: OnboardingData | null;
+}) {
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState<string | null>(null);
@@ -105,14 +110,7 @@ export default function Dashboard({ email }: { email: string }) {
     }
   }
 
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
-  }
-
   const thinking = status === "locating" || status === "thinking" || manualLoading;
-  const initial = email.charAt(0).toUpperCase();
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
 
   const ctaLabel =
@@ -131,21 +129,7 @@ export default function Dashboard({ email }: { email: string }) {
           <Dial size={22} spinning={thinking} />
           <span className="font-medium text-lg tracking-wide">IDLE</span>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-mist hidden sm:inline">{email}</span>
-          <button
-            onClick={logout}
-            className="text-sm text-mist hover:text-ink underline underline-offset-4"
-          >
-            Log out
-          </button>
-          <div
-            aria-hidden="true"
-            className="w-10 h-10 rounded-full bg-ink text-paper flex items-center justify-center text-sm font-medium"
-          >
-            {initial}
-          </div>
-        </div>
+        <ProfileMenu email={email} preferences={preferences} />
       </header>
 
       <section className="grid lg:grid-cols-[1.1fr_0.9fr] gap-5">

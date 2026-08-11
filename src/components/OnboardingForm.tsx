@@ -3,15 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { INTEREST_OPTIONS } from "@/lib/constants";
+import type { OnboardingData } from "@/lib/types";
 
-export default function OnboardingForm() {
+export default function OnboardingForm({ initialData }: { initialData?: OnboardingData | null }) {
   const router = useRouter();
-  const [interests, setInterests] = useState<string[]>([]);
-  const [budget, setBudget] = useState<"$" | "$$" | "$$$">("$$");
-  const [pace, setPace] = useState<"chill" | "balanced" | "packed">("balanced");
-  const [dietary, setDietary] = useState("");
-  const [travelRadiusKm, setTravelRadiusKm] = useState(5);
-  const [notes, setNotes] = useState("");
+  const isEditing = !!initialData;
+  const [interests, setInterests] = useState<string[]>(initialData?.interests ?? []);
+  const [budget, setBudget] = useState<"$" | "$$" | "$$$">(initialData?.budget ?? "$$");
+  const [pace, setPace] = useState<"chill" | "balanced" | "packed">(initialData?.pace ?? "balanced");
+  const [dietary, setDietary] = useState(initialData?.dietary ?? "");
+  const [travelRadiusKm, setTravelRadiusKm] = useState(initialData?.travelRadiusKm ?? 5);
+  const [notes, setNotes] = useState(initialData?.notes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -171,7 +173,7 @@ export default function OnboardingForm() {
         disabled={loading}
         className="btn-brass w-full rounded-full font-medium py-3 disabled:opacity-60"
       >
-        {loading ? "Saving..." : "Start IDLE-ing"}
+        {loading ? "Saving..." : isEditing ? "Save changes" : "Start IDLE-ing"}
       </button>
     </form>
   );
