@@ -1,35 +1,78 @@
 import type { Recommendation } from "./types";
 
 /**
- * Best-effort photo lookup for a recommendation card, using Wikipedia's
- * public search API — no API key, same "free and keyless" spirit as the
- * geocoding and weather lookups elsewhere in this app. If nothing turns up
- * (obscure venue, API hiccup) the card just renders without a photo.
+ * Best-effort photo lookup for a recommendation card, using the Google
+ * Places API (New) Text Search + Photo Media endpoints. Requires
+ * GOOGLE_PLACES_API_KEY in .env (console.cloud.google.com — enable "Places
+ * API (New)" and set up billing; Google gives a recurring monthly credit
+ * that comfortably covers moderate traffic).
+ *
+ * This replaces an earlier Wikipedia-based lookup: Wikipedia only has
+ * thumbnails for venues notable enough to have their own article, which
+ * misses most small local businesses — exactly the kind of "hidden gem"
+ * this app tries to recommend. Google Places has real, user-submitted
+ * photos for almost any real venue.
+ *
+ * If nothing turns up (obscure venue, no photos on the listing, API
+ * hiccup, missing key) the card just renders without a photo, same as
+ * before.
  */
-async function lookupPhoto(query: string): Promise<string | null> {
+async function lookupPlacePhoto(
+  query: string,
+  location?: { lat: number; lon: number }
+): Promise<string | null> {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) return null;
+
   try {
-    const url =
-      "https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=1" +
-      `&gsrsearch=${encodeURIComponent(query)}` +
-      "&prop=pageimages&piprop=thumbnail&pithumbsize=640&format=json&origin=*";
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const pages = data?.query?.pages;
-    if (!pages) return null;
-    const page = Object.values(pages)[0] as { thumbnail?: { source?: string } } | undefined;
-    return page?.thumbnail?.source ?? null;
+    const searchBody: Record<string, unknown> = { textQuery: query, maxResultCount: 1 };
+    // Biasing toward the recommendation's actual coordinates avoids picking
+    // up a same-named venue in the wrong city — a 10km soft bias, not a
+    // hard filter, since a great match just outside the radius shouldn't
+    // be discarded.
+    if (location) {
+      searchBody.locationBias = {
+        circle: {
+          center: { latitude: location.lat, longitude: location.lon },
+          radius: 10000,
+        },
+      };
+    }
+
+    const searchRes = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "places.photos",
+      },
+      body: JSON.stringify(searchBody),
+      cache: "no-store",
+    });
+    if (!searchRes.ok) return null;
+
+    const searchData = await searchRes.json();
+    const photoName = searchData?.places?.[0]?.photos?.[0]?.name;
+    if (!photoName) return null;
+
+    // The media endpoint 302-redirects to the actual image, so its URL is
+    // directly usable as an <img src> — no need to follow the redirect
+    // ourselves or handle it as a separate fetch.
+    return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=640&key=${apiKey}`;
   } catch {
     return null;
   }
 }
 
 /** Attaches a best-effort photoUrl to each recommendation, in parallel. */
-export async function attachPhotos(recs: Recommendation[]): Promise<Recommendation[]> {
+export async function attachPhotos(
+  recs: Recommendation[],
+  location?: { lat: number; lon: number }
+): Promise<Recommendation[]> {
   return Promise.all(
     recs.map(async (rec) => ({
       ...rec,
-      photoUrl: await lookupPhoto(`${rec.name} ${rec.category}`),
+      photoUrl: await lookupPlacePhoto(`${rec.name} ${rec.category}`, location),
     }))
   );
 }

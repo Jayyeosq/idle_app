@@ -27,9 +27,14 @@ the Anthropic API.
   single request (interests, budget, pace, max distance) without touching
   your saved profile. These are session-only and passed alongside the
   profile markdown to the LLM (`src/components/FilterPanel.tsx`).
-- **Photos** — each recommendation card shows a best-effort photo looked
-  up via Wikipedia's free, keyless search API (`src/lib/photos.ts`); cards
-  fall back to a plain category tile when nothing turns up.
+- **Photos** — each recommendation card shows a best-effort real photo of
+  the venue via the Google Places API (`src/lib/photos.ts`), biased toward
+  the recommendation's coordinates so same-named venues in other cities
+  don't get picked up by mistake. Requires `GOOGLE_PLACES_API_KEY` in
+  `.env` (enable "Places API (New)" in Google Cloud Console; billing must
+  be enabled, though Google's recurring monthly credit comfortably covers
+  moderate traffic). Cards fall back to a plain category tile when nothing
+  turns up (obscure venue, no photos on the listing, or the key is unset).
 - **Feedback loop** — liking/passing on a suggestion appends a line to your
   profile file. There's no separate database table for this — the markdown
   file *is* the record, and it's also exactly what the model reads next
@@ -47,7 +52,7 @@ note below.
 ```bash
 npm install
 cp .env.example .env
-# then edit .env: set ANTHROPIC_API_KEY and AUTH_SECRET
+# then edit .env: set ANTHROPIC_API_KEY, AUTH_SECRET, and GOOGLE_PLACES_API_KEY
 npm run dev
 ```
 

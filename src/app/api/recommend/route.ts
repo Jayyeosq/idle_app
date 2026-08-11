@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  recommendations = await attachPhotos(recommendations);
+  recommendations = await attachPhotos(recommendations, { lat, lon });
 
   const sessionId = nanoid(6);
   await appendRecommendationSession(
