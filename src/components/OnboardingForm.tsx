@@ -2,19 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
-const INTEREST_OPTIONS = [
-  "food",
-  "nature",
-  "art & culture",
-  "nightlife",
-  "shopping",
-  "fitness",
-  "live music",
-  "quiet / rest",
-  "family-friendly",
-  "hidden gems",
-];
+import { INTEREST_OPTIONS } from "@/lib/constants";
 
 export default function OnboardingForm() {
   const router = useRouter();
