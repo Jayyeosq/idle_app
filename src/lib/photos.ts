@@ -47,7 +47,9 @@ async function lookupPlacePhoto(
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "places.photos",
+        // Widened beyond just "places.photos" so the diagnostic below can
+        // show *which* place matched, not just whether it has a photo.
+        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.photos",
       },
       body: JSON.stringify(searchBody),
       cache: "no-store",
@@ -63,9 +65,15 @@ async function lookupPlacePhoto(
     }
 
     const searchData = await searchRes.json();
-    const photoName = searchData?.places?.[0]?.photos?.[0]?.name;
+    const match = searchData?.places?.[0];
+    const photoName = match?.photos?.[0]?.name;
     if (!photoName) {
-      console.error(`[photos] No photo found for "${query}". Raw response:`, JSON.stringify(searchData));
+      console.error(
+        `[photos] No photo for "${query}". Matched place:`,
+        match ? `${match.displayName?.text ?? "?"} (${match.formattedAddress ?? "no address"})` : "no match at all",
+        "— raw:",
+        JSON.stringify(searchData)
+      );
       return null;
     }
 
@@ -87,7 +95,7 @@ export async function attachPhotos(
   return Promise.all(
     recs.map(async (rec) => ({
       ...rec,
-      photoUrl: await lookupPlacePhoto(`${rec.name} ${rec.category}`, location),
+      photoUrl: await lookupPlacePhoto(rec.name, location),
     }))
   );
 }
