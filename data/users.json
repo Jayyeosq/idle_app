@@ -1,0 +1,18 @@
+{
+  "users": [
+    {
+      "id": "b2R-I5L1Rlnv",
+      "email": "jayyeosq@hotmail.com",
+      "passwordHash": "$2a$10$ScSo0it5q241nMIeDbDKnOcCBvf/meUfewOF.BSs6zrZ8iIIxY/4e",
+      "onboarded": true,
+      "createdAt": "2026-08-11T07:19:44.247Z"
+    },
+    {
+      "id": "VB7P99cLF1fe",
+      "email": "jc@gmail.com",
+      "passwordHash": "$2a$10$j7ar2DfXK0Ug9Xz.hU1dbeRH3MdaON/QbOaPN3.Y7ZOFji.AMkXEu",
+      "onboarded": true,
+      "createdAt": "2026-08-11T07:51:30.861Z"
+    }
+  ]
+}
