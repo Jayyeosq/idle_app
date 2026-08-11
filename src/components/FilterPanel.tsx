@@ -1,6 +1,6 @@
 "use client";
 
-import { INTEREST_OPTIONS, BUDGET_OPTIONS, PACE_OPTIONS } from "@/lib/constants";
+import { INTEREST_OPTIONS, BUDGET_OPTIONS, PACE_OPTIONS, COUNT_OPTIONS } from "@/lib/constants";
 import type { RecommendationFilters } from "@/lib/types";
 
 /**
@@ -30,7 +30,8 @@ export default function FilterPanel({
     (value.interests?.length ?? 0) +
     (value.budget ? 1 : 0) +
     (value.pace ? 1 : 0) +
-    (value.maxDistanceKm ? 1 : 0);
+    (value.maxDistanceKm ? 1 : 0) +
+    (value.count ? 1 : 0);
 
   return (
     <section className="panel-plate mt-14 p-7 sm:p-8 flex flex-col sm:grid sm:grid-cols-[1fr_auto] gap-6 sm:items-center">
@@ -108,6 +109,27 @@ export default function FilterPanel({
                   }`}
                 >
                   {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-mist mb-2">How many</p>
+            <div className="flex gap-1.5">
+              {COUNT_OPTIONS.map((n) => (
+                <button
+                  type="button"
+                  key={n}
+                  onClick={() => onChange({ ...value, count: value.count === n ? undefined : n })}
+                  aria-pressed={value.count === n}
+                  className={`px-3 py-1 rounded-md text-xs border transition-colors ${
+                    value.count === n
+                      ? "bg-sage-tint border-sage text-sage"
+                      : "border-ink/15 text-ink-soft hover:border-sage/60"
+                  }`}
+                >
+                  {n}
                 </button>
               ))}
             </div>

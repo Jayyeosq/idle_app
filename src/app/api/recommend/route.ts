@@ -14,6 +14,7 @@ const FiltersSchema = z
     budget: z.enum(["$", "$$", "$$$"]).optional(),
     pace: z.enum(["chill", "balanced", "packed"]).optional(),
     maxDistanceKm: z.number().positive().optional(),
+    count: z.union([z.literal(3), z.literal(5), z.literal(8)]).optional(),
   })
   .optional();
 

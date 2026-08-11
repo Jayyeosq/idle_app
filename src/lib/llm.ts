@@ -9,11 +9,15 @@ const RecommendationSchema = z.object({
   estimatedTime: z.string(),
   distanceHint: z.string(),
 });
-const ResponseSchema = z.object({
-  recommendations: z.array(RecommendationSchema).min(1).max(6),
-});
 
-const SYSTEM_PROMPT = `You are the recommendation engine behind IDLE, an app that suggests what
+// Bounds the hard validation gate to whatever the largest preset the UI
+// offers is (see COUNT_OPTIONS in lib/constants.ts) — a backstop in case
+// the model overshoots the count instruction below, not the primary
+// control on count itself.
+const MAX_RECOMMENDATIONS = 8;
+
+function buildSystemPrompt(count: number): string {
+  return `You are the recommendation engine behind IDLE, an app that suggests what
 someone could go do right now based on their stored taste profile and their
 current situation. You will be given:
 
@@ -41,9 +45,16 @@ exactly this shape:
   ]
 }
 
-Return between 3 and 5 recommendations. Prefer specific, plausible venues or
-activities appropriate to the stated location over generic filler. If the
-weather makes an outdoor activity unpleasant, favor indoor alternatives.`;
+Return exactly ${count} recommendations — fewer only if the location genuinely
+can't support that many distinct, plausible options. Prefer specific,
+plausible venues or activities appropriate to the stated location over
+generic filler. If the weather makes an outdoor activity unpleasant, favor
+indoor alternatives.`;
+}
+
+const ResponseSchema = z.object({
+  recommendations: z.array(RecommendationSchema).min(1).max(MAX_RECOMMENDATIONS),
+});
 
 export async function generateRecommendations(opts: {
   profileMarkdown: string;
@@ -64,6 +75,8 @@ export async function generateRecommendations(opts: {
     : "unavailable";
 
   const f = opts.filters;
+  const count = f?.count ?? 5;
+
   const filterLines: string[] = [];
   if (f?.interests?.length) filterLines.push(`Interests: ${f.interests.join(", ")}`);
   if (f?.budget) filterLines.push(`Budget: ${f.budget}`);
@@ -93,9 +106,11 @@ Generate this user's IDLE recommendations for right now.`;
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1500,
+      // Scales with count so an 8-recommendation request doesn't get cut
+      // off mid-JSON — roughly 250 tokens per item plus fixed overhead.
+      max_tokens: 400 + count * 250,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: buildSystemPrompt(count) },
         { role: "user", content: userMessage },
       ],
     }),

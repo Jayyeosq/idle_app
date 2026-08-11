@@ -15,3 +15,4 @@ export const INTEREST_OPTIONS = [
 
 export const BUDGET_OPTIONS = ["$", "$$", "$$$"] as const;
 export const PACE_OPTIONS = ["chill", "balanced", "packed"] as const;
+export const COUNT_OPTIONS = [3, 5, 8] as const;

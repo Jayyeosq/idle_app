@@ -52,4 +52,5 @@ export type RecommendationFilters = {
   budget?: "$" | "$$" | "$$$";
   pace?: "chill" | "balanced" | "packed";
   maxDistanceKm?: number;
+  count?: 3 | 5 | 8;
 };
