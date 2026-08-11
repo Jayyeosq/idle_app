@@ -19,7 +19,17 @@ the Anthropic API.
   current weather (Open-Meteo), then sends your whole profile markdown file
   plus that context to Claude, which returns a structured list of specific
   suggestions. The session gets appended back into your profile file, so
-  the next request has more to go on.
+  the next request has more to go on. If the browser can't or won't hand
+  over Geolocation (permission denied, or unsupported — common on mobile),
+  a manual "enter a place" fallback forward-geocodes free text instead
+  (`src/app/api/geocode/route.ts`).
+- **Filters** — a collapsible panel on the dashboard lets you nudge a
+  single request (interests, budget, pace, max distance) without touching
+  your saved profile. These are session-only and passed alongside the
+  profile markdown to the LLM (`src/components/FilterPanel.tsx`).
+- **Photos** — each recommendation card shows a best-effort photo looked
+  up via Wikipedia's free, keyless search API (`src/lib/photos.ts`); cards
+  fall back to a plain category tile when nothing turns up.
 - **Feedback loop** — liking/passing on a suggestion appends a line to your
   profile file. There's no separate database table for this — the markdown
   file *is* the record, and it's also exactly what the model reads next
