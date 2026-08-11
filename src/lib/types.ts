@@ -26,6 +26,7 @@ export type Recommendation = {
   estimatedTime: string; // e.g. "45 min"
   distanceHint: string; // e.g. "~1.2 km away"
   photoUrl?: string | null;
+  mapsUrl?: string | null; // link to the venue's real Google Maps page, if matched
 };
 
 export type FeedbackReaction = "up" | "down";

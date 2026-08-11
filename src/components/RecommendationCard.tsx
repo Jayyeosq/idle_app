@@ -58,7 +58,18 @@ export default function RecommendationCard({ rec }: { rec: Recommendation }) {
         <p className="text-xs uppercase tracking-[0.08em] text-mist mb-2">
           {rec.category} · {rec.estimatedTime} · {rec.distanceHint}
         </p>
-        <h3 className="font-display text-xl mb-1.5">{rec.name}</h3>
+        {rec.mapsUrl ? (
+          <a
+            href={rec.mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-display text-xl mb-1.5 block hover:text-sage transition-colors underline decoration-transparent hover:decoration-sage underline-offset-4"
+          >
+            {rec.name}
+          </a>
+        ) : (
+          <h3 className="font-display text-xl mb-1.5">{rec.name}</h3>
+        )}
         <p className="text-[13px] text-ink-soft leading-relaxed mb-3">{rec.why}</p>
 
         {!reaction ? (
