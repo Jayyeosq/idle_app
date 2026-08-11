@@ -6,10 +6,24 @@ import { readProfile, appendRecommendationSession } from "@/lib/profile";
 import { reverseGeocode } from "@/lib/geocode";
 import { getCurrentWeather } from "@/lib/weather";
 import { generateRecommendations } from "@/lib/llm";
+import { attachPhotos } from "@/lib/photos";
+
+const FiltersSchema = z
+  .object({
+    interests: z.array(z.string()).optional(),
+    budget: z.enum(["$", "$$", "$$$"]).optional(),
+    pace: z.enum(["chill", "balanced", "packed"]).optional(),
+    maxDistanceKm: z.number().positive().optional(),
+  })
+  .optional();
 
 const BodySchema = z.object({
   lat: z.number(),
   lon: z.number(),
+  // Set when coordinates came from the manual-location fallback (already
+  // geocoded client-side), so we skip a redundant reverse-geocode call.
+  label: z.string().optional(),
+  filters: FiltersSchema,
 });
 
 export async function POST(req: NextRequest) {
@@ -26,9 +40,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Finish onboarding first." }, { status: 400 });
   }
 
-  const { lat, lon } = parsed.data;
+  const { lat, lon, filters } = parsed.data;
   const [label, weather] = await Promise.all([
-    reverseGeocode(lat, lon),
+    parsed.data.label ? Promise.resolve(parsed.data.label) : reverseGeocode(lat, lon),
     getCurrentWeather(lat, lon),
   ]);
 
@@ -45,6 +59,7 @@ export async function POST(req: NextRequest) {
       location: { lat, lon, label },
       localTime,
       weather,
+      filters,
     });
   } catch (err: any) {
     return NextResponse.json(
@@ -52,6 +67,8 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
+
+  recommendations = await attachPhotos(recommendations);
 
   const sessionId = nanoid(6);
   await appendRecommendationSession(
