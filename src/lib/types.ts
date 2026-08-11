@@ -25,6 +25,16 @@ export type Recommendation = {
   why: string;
   estimatedTime: string; // e.g. "45 min"
   distanceHint: string; // e.g. "~1.2 km away"
+  photoUrl?: string | null;
 };
 
 export type FeedbackReaction = "up" | "down";
+
+// Session-only tweaks a returning user can apply on top of their saved
+// profile preferences without editing the profile itself.
+export type RecommendationFilters = {
+  interests?: string[];
+  budget?: "$" | "$$" | "$$$";
+  pace?: "chill" | "balanced" | "packed";
+  maxDistanceKm?: number;
+};

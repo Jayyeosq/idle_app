@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import type { LocationInfo, WeatherInfo, Recommendation } from "./types";
+import type { LocationInfo, WeatherInfo, Recommendation, RecommendationFilters } from "./types";
 
 const RecommendationSchema = z.object({
   name: z.string(),
@@ -50,6 +50,7 @@ export async function generateRecommendations(opts: {
   location: LocationInfo;
   localTime: string;
   weather: WeatherInfo | null;
+  filters?: RecommendationFilters;
 }): Promise<Recommendation[]> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
@@ -62,6 +63,16 @@ export async function generateRecommendations(opts: {
     ? `${opts.weather.tempC}°C, ${opts.weather.condition}`
     : "unavailable";
 
+  const f = opts.filters;
+  const filterLines: string[] = [];
+  if (f?.interests?.length) filterLines.push(`Interests: ${f.interests.join(", ")}`);
+  if (f?.budget) filterLines.push(`Budget: ${f.budget}`);
+  if (f?.pace) filterLines.push(`Pace: ${f.pace}`);
+  if (f?.maxDistanceKm) filterLines.push(`Max travel distance: ${f.maxDistanceKm} km`);
+  const filterBlock = filterLines.length
+    ? `\n## Filters for this request only\n\nThe user set these just for this request — apply them and prefer them\nover the profile's saved preferences wherever the two conflict, but do not\ntreat them as a change to the user's underlying taste profile:\n\n${filterLines.map((l) => `- ${l}`).join("\n")}\n`
+    : "";
+
   const userMessage = `## User profile file
 
 ${opts.profileMarkdown}
@@ -71,7 +82,7 @@ ${opts.profileMarkdown}
 - Location: ${opts.location.label} (lat ${opts.location.lat.toFixed(4)}, lon ${opts.location.lon.toFixed(4)})
 - Local time: ${opts.localTime}
 - Weather: ${weatherLine}
-
+${filterBlock}
 Generate this user's IDLE recommendations for right now.`;
 
   const response = await fetch("https://api.deepseek.com/chat/completions", {

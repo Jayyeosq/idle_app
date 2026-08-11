@@ -1,3 +1,5 @@
+import type { LocationInfo } from "./types";
+
 /**
  * Turns lat/lon from the browser's Geolocation API into a human-readable
  * label using OpenStreetMap's free Nominatim service. No API key needed,
@@ -24,5 +26,38 @@ export async function reverseGeocode(lat: number, lon: number): Promise<string> 
     return [place, city, country].filter(Boolean).join(", ") || data.display_name || "your location";
   } catch {
     return "your location";
+  }
+}
+
+/**
+ * The reverse of the above: turns a free-text place name (typed by hand)
+ * into coordinates plus a label. This backs the manual-location fallback
+ * for browsers/devices that can't or won't hand over Geolocation (common
+ * on mobile when location services are off or permission is denied).
+ */
+export async function forwardGeocode(query: string): Promise<LocationInfo | null> {
+  const contact = process.env.NOMINATIM_CONTACT_EMAIL || "no-contact-set@example.com";
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(
+    query
+  )}&limit=1&addressdetails=1`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": `idle-app (${contact})` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const results = await res.json();
+    const first = results?.[0];
+    if (!first) return null;
+    const addr = first.address ?? {};
+    const place =
+      addr.neighbourhood || addr.suburb || addr.town || addr.village || addr.city_district;
+    const city = addr.city || addr.town || addr.county;
+    const country = addr.country;
+    const label = [place, city, country].filter(Boolean).join(", ") || first.display_name || query;
+    return { lat: parseFloat(first.lat), lon: parseFloat(first.lon), label };
+  } catch {
+    return null;
   }
 }
