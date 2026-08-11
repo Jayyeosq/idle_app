@@ -22,7 +22,10 @@ async function lookupPlacePhoto(
   location?: { lat: number; lon: number }
 ): Promise<string | null> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.error("[photos] GOOGLE_PLACES_API_KEY is not set — skipping photo lookup.");
+    return null;
+  }
 
   try {
     const searchBody: Record<string, unknown> = { textQuery: query, maxResultCount: 1 };
@@ -49,17 +52,29 @@ async function lookupPlacePhoto(
       body: JSON.stringify(searchBody),
       cache: "no-store",
     });
-    if (!searchRes.ok) return null;
+
+    // TEMPORARY DIAGNOSTIC — remove once photos are working. This surfaces
+    // Google's actual error body (permission/billing/key restriction
+    // issues all show up here) instead of failing silently.
+    if (!searchRes.ok) {
+      const bodyText = await searchRes.text();
+      console.error(`[photos] Places searchText failed (${searchRes.status}) for "${query}":`, bodyText);
+      return null;
+    }
 
     const searchData = await searchRes.json();
     const photoName = searchData?.places?.[0]?.photos?.[0]?.name;
-    if (!photoName) return null;
+    if (!photoName) {
+      console.error(`[photos] No photo found for "${query}". Raw response:`, JSON.stringify(searchData));
+      return null;
+    }
 
     // The media endpoint 302-redirects to the actual image, so its URL is
     // directly usable as an <img src> — no need to follow the redirect
     // ourselves or handle it as a separate fetch.
     return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=640&key=${apiKey}`;
-  } catch {
+  } catch (err) {
+    console.error(`[photos] Places lookup threw for "${query}":`, err);
     return null;
   }
 }
