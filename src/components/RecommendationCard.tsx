@@ -25,32 +25,32 @@ export default function RecommendationCard({ rec }: { rec: Recommendation }) {
   }
 
   return (
-    <article className="rounded-lg border border-white/10 bg-ink-soft overflow-hidden flex flex-col gap-3">
+    <article className="rounded-xl border border-white/10 bg-ink-soft overflow-hidden flex flex-col gap-3 shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-black/30 hover:border-white/20">
       {showPhoto ? (
-        <img
-          src={rec.photoUrl!}
-          alt=""
-          onError={() => setPhotoFailed(true)}
-          className="w-full h-36 object-cover"
-          loading="lazy"
-        />
+        <div className="relative w-full h-40">
+          <img
+            src={rec.photoUrl!}
+            alt=""
+            onError={() => setPhotoFailed(true)}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-soft via-ink-soft/10 to-transparent" />
+          <span className="absolute bottom-2.5 left-4 font-mono text-xs text-brass-soft uppercase tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+            {rec.category}
+          </span>
+        </div>
       ) : (
-        <div className="w-full h-20 flex items-center justify-center bg-gradient-to-br from-ink to-ink-soft border-b border-white/10">
-          <span className="font-mono text-xs text-mist uppercase tracking-wide">
+        <div className="relative w-full h-20 flex items-center justify-center bg-gradient-to-br from-ink to-ink-soft border-b border-white/10">
+          <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_30%_20%,rgba(200,155,60,0.12),transparent_60%)]" />
+          <span className="relative font-mono text-xs text-mist uppercase tracking-wide">
             {rec.category}
           </span>
         </div>
       )}
 
-      <div className="px-5 flex items-start justify-between gap-3">
-        <div>
-          {showPhoto && (
-            <span className="font-mono text-xs text-brass uppercase tracking-wide">
-              {rec.category}
-            </span>
-          )}
-          <h3 className="font-display text-xl mt-0.5">{rec.name}</h3>
-        </div>
+      <div className="px-5">
+        <h3 className="font-display text-xl">{rec.name}</h3>
       </div>
 
       <p className="text-paper/85 text-sm leading-relaxed px-5">{rec.why}</p>

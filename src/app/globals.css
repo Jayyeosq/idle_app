@@ -9,8 +9,50 @@
 body {
   background-color: #14171f;
   background-image:
-    radial-gradient(circle at 15% 10%, rgba(200, 155, 60, 0.08), transparent 40%),
-    radial-gradient(circle at 85% 90%, rgba(124, 152, 133, 0.08), transparent 45%);
+    /* faint machined grain — keeps large flat panels from looking like a plain div */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 70% 55% at 50% -8%, rgba(200, 155, 60, 0.14), transparent 60%),
+    radial-gradient(circle at 12% 15%, rgba(200, 155, 60, 0.07), transparent 40%),
+    radial-gradient(circle at 88% 92%, rgba(124, 152, 133, 0.09), transparent 45%),
+    radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.35) 100%);
+  background-attachment: fixed;
+}
+
+/* Primary "brass" action: a metallic gradient + shadow instead of a flat
+   fill, so it reads as the same material as the dial rather than a plain
+   CSS color swatch. */
+.btn-brass {
+  background: linear-gradient(180deg, #e4c778 0%, #c89b3c 55%, #b5872e 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 8px 16px -8px rgba(200, 155, 60, 0.5);
+  transition: filter 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+.btn-brass:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 10px 20px -8px rgba(200, 155, 60, 0.6);
+}
+.btn-brass:active:not(:disabled) {
+  filter: brightness(0.97);
+  transform: translateY(1px);
+}
+
+/* Reusable "instrument panel" surface: a subtly beveled plate with a hairline
+   rim, used behind the dial and around key panels instead of a flat card. */
+.panel-plate {
+  position: relative;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.05), transparent 60%),
+    linear-gradient(180deg, #1b1f2a 0%, #14171f 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 20px 40px -20px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(0, 0, 0, 0.3);
 }
 
 ::selection {

@@ -132,10 +132,10 @@ export default function Dashboard({ email }: { email: string }) {
         type="button"
         onClick={findSomething}
         disabled={thinking}
-        className="flex flex-col items-center gap-4 group"
+        className="panel-plate rounded-2xl px-14 py-10 flex flex-col items-center gap-4 group transition-transform hover:-translate-y-0.5 disabled:hover:translate-y-0"
       >
         <Dial size={120} spinning={thinking} />
-        <span className="font-mono text-sm text-brass group-hover:text-brass-soft transition-colors">
+        <span className="font-mono text-sm text-brass group-hover:text-brass-soft transition-colors tracking-wide">
           {status === "locating"
             ? "finding you..."
             : status === "thinking"
@@ -172,7 +172,7 @@ export default function Dashboard({ email }: { email: string }) {
           <button
             type="submit"
             disabled={manualLoading || !manualQuery.trim()}
-            className="rounded-md bg-brass text-ink text-sm font-medium px-4 py-2 hover:bg-brass-soft transition-colors disabled:opacity-60"
+            className="btn-brass rounded-md text-ink text-sm font-medium px-4 py-2 disabled:opacity-60"
           >
             {manualLoading ? "..." : "Go"}
           </button>
