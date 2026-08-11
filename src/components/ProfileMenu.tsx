@@ -86,6 +86,13 @@ export default function ProfileMenu({
           </div>
 
           <Link
+            href="/profile"
+            className="block text-sm text-ink hover:text-sage underline underline-offset-4 mb-2"
+          >
+            View full profile
+          </Link>
+
+          <Link
             href="/onboarding"
             className="block text-sm text-sage hover:text-ink underline underline-offset-4 mb-3"
           >

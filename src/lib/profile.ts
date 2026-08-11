@@ -1,5 +1,5 @@
 import { readTextFile, writeTextFile, profileFilePath } from "./storage";
-import type { OnboardingData, Recommendation, LocationInfo, FeedbackReaction } from "./types";
+import type { OnboardingData, Recommendation, LocationInfo, FeedbackReaction, HistoryItem } from "./types";
 
 /**
  * Each user's whole taste profile — onboarding preferences plus a running
@@ -58,6 +58,58 @@ export function parsePreferences(markdown: string): OnboardingData | null {
     travelRadiusKm: Number.isFinite(travelRadiusKm) ? travelRadiusKm : 5,
     notes: isEmpty(notesRaw) ? "" : notesRaw!,
   };
+}
+
+/**
+ * Reconstructs a flat, reverse-chronological list of past recommendations
+ * from the History section, matching each one to its feedback line if a
+ * reaction was ever given. Feedback lines are appended wherever the file
+ * currently ends (see appendFeedback below), not necessarily right after
+ * their recommendation, so feedback is collected globally first and
+ * matched back to recommendations by id rather than by position.
+ *
+ * Best-effort like the photo lookup elsewhere: this is regex-parsing our
+ * own generated markdown, so a line that doesn't match the expected shape
+ * is just skipped rather than breaking the whole page.
+ */
+export function parseHistory(markdown: string): HistoryItem[] {
+  const historyMatch = markdown.match(/## History([\s\S]*)/);
+  if (!historyMatch) return [];
+  const historyBlock = historyMatch[1];
+
+  const feedbackMap = new Map<string, FeedbackReaction>();
+  const feedbackRe = /- Feedback on \[([^\]]+)\][^:]*:\s*(👍|👎)/g;
+  let fm: RegExpExecArray | null;
+  while ((fm = feedbackRe.exec(historyBlock))) {
+    feedbackMap.set(fm[1], fm[2] === "👍" ? "up" : "down");
+  }
+
+  const items: HistoryItem[] = [];
+  const sessionRe = /### (.+?) — (.+?) \(session [^)]+\)\n([\s\S]*?)(?=\n### |$)/g;
+  let sm: RegExpExecArray | null;
+  while ((sm = sessionRe.exec(historyBlock))) {
+    const [, timestamp, location, body] = sm;
+    const lineRe = /- \[([^\]]+)\] \*\*(.+?)\*\* _\((.+?), (.+?), (.+?)\)_ — (.+)/g;
+    let lm: RegExpExecArray | null;
+    while ((lm = lineRe.exec(body))) {
+      const [, id, name, category, estimatedTime, distanceHint, why] = lm;
+      items.push({
+        id,
+        name,
+        category,
+        estimatedTime,
+        distanceHint,
+        why: why.trim(),
+        location,
+        timestamp,
+        reaction: feedbackMap.get(id) ?? null,
+      });
+    }
+  }
+
+  // Timestamps are "YYYY-MM-DD HH:MM UTC" — that format sorts correctly as
+  // plain strings, no date parsing needed.
+  return items.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
 }
 
 export async function createProfile(

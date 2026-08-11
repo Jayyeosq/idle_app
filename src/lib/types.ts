@@ -31,6 +31,20 @@ export type Recommendation = {
 
 export type FeedbackReaction = "up" | "down";
 
+// A single past recommendation, reconstructed from the profile markdown's
+// History section, with its feedback (if any) matched back in.
+export type HistoryItem = {
+  id: string;
+  name: string;
+  category: string;
+  why: string;
+  estimatedTime: string;
+  distanceHint: string;
+  location: string;
+  timestamp: string; // "YYYY-MM-DD HH:MM UTC", sorts correctly as a plain string
+  reaction: FeedbackReaction | null;
+};
+
 // Session-only tweaks a returning user can apply on top of their saved
 // profile preferences without editing the profile itself.
 export type RecommendationFilters = {
