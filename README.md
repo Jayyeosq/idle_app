@@ -16,10 +16,11 @@ the Anthropic API.
   recommendation session and every 👍/👎 gets appended to.
 - **Recommendations** — on the dashboard, IDLE asks the browser for your
   location, reverse-geocodes it (OpenStreetMap Nominatim) and fetches
-  current weather (Open-Meteo), then sends your whole profile markdown file
-  plus that context to Claude, which returns a structured list of specific
-  suggestions. The session gets appended back into your profile file, so
-  the next request has more to go on. If the browser can't or won't hand
+  current weather (OpenWeatherMap), then sends your whole profile markdown
+  file plus that context to Claude, which returns a structured list of
+  specific suggestions. The session gets appended back into your profile
+  file, so the next request has more to go on. If the browser can't or won't
+  hand
   over Geolocation (permission denied, or unsupported — common on mobile),
   a manual "enter a place" fallback forward-geocodes free text instead
   (`src/app/api/geocode/route.ts`).
@@ -52,7 +53,7 @@ note below.
 ```bash
 npm install
 cp .env.example .env
-# then edit .env: set ANTHROPIC_API_KEY, AUTH_SECRET, and GOOGLE_PLACES_API_KEY
+# then edit .env: set ANTHROPIC_API_KEY, AUTH_SECRET, GOOGLE_PLACES_API_KEY, and OPENWEATHERMAP_API_KEY
 npm run dev
 ```
 
@@ -103,7 +104,7 @@ src/
     users.ts                  — credentials store
     auth.ts, session.ts       — JWT session handling
     profile.ts                — reads/writes each user's markdown profile
-    geocode.ts, weather.ts    — free, keyless location/weather lookups
+    geocode.ts, weather.ts    — location/weather lookups (weather needs an API key, geocode is free/keyless)
     llm.ts                    — builds the prompt, calls Claude, validates the response
   middleware.ts                — protects /dashboard and /onboarding
 ```
@@ -117,6 +118,13 @@ src/
 - Nominatim (reverse geocoding) is free but rate-limited and asks for a
   contact email in the User-Agent — set `NOMINATIM_CONTACT_EMAIL` in
   `.env`. For real production traffic, consider a paid geocoder.
+- Weather uses OpenWeatherMap's classic Current Weather endpoint —
+  `OPENWEATHERMAP_API_KEY` in `.env` (free tier: 1,000,000 calls/month, no
+  card required). Originally used Open-Meteo, which is keyless but
+  rate-limits by IP rather than by account — on shared hosts like Render's
+  free tier, that IP is shared across many unrelated customers, so the
+  daily cap could be exhausted by other apps entirely. A per-account key
+  avoids that.
 - There's no password reset flow, email verification, or rate limiting on
   auth endpoints — add these before taking this anywhere near real users.
 - The profile markdown file is appended to indefinitely; for a long-lived
