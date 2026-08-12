@@ -32,17 +32,24 @@ export async function getCurrentWeather(lat: number, lon: number): Promise<Weath
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code`;
     const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`[weather] Open-Meteo request failed (${res.status}) for ${lat},${lon}:`, await res.text());
+      return null;
+    }
     const data = await res.json();
     const current = data.current;
-    if (!current) return null;
+    if (!current) {
+      console.error(`[weather] Open-Meteo response had no "current" field for ${lat},${lon}. Raw:`, JSON.stringify(data));
+      return null;
+    }
     const match = WMO_CODES[current.weather_code] ?? { label: "Unknown conditions", icon: "cloudy" as const };
     return {
       tempC: current.temperature_2m,
       condition: match.label,
       icon: match.icon,
     };
-  } catch {
+  } catch (err) {
+    console.error(`[weather] Lookup threw for ${lat},${lon}:`, err);
     return null;
   }
 }

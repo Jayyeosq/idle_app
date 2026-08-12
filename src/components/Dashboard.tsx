@@ -141,13 +141,24 @@ export default function Dashboard({
         <div className="panel-plate px-8 py-14 sm:px-12 sm:py-16 flex flex-col justify-center">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3">
             <span className="text-xs uppercase tracking-[0.16em] text-mist">{today}</span>
-            {weather && (
+            {weather ? (
               <span className="flex items-center gap-1.5 text-xs text-ink-soft">
                 <span className="text-mist">·</span>
                 <WeatherIcon icon={weather.icon} size={14} />
                 {Math.round(weather.tempC)}°C · {weather.condition}
                 {location ? ` · ${location}` : ""}
               </span>
+            ) : (
+              // location is set on every successful fetch, so if it's
+              // present but weather isn't, a request completed and the
+              // weather lookup specifically failed — say so rather than
+              // silently showing nothing, which looks like a bug.
+              location && (
+                <span className="flex items-center gap-1.5 text-xs text-mist">
+                  <span>·</span>
+                  weather unavailable · {location}
+                </span>
+              )
             )}
           </div>
           <h1 className="font-display text-5xl sm:text-[60px] leading-[0.98] tracking-tight max-w-xl">
