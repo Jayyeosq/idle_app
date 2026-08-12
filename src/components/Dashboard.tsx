@@ -139,7 +139,17 @@ export default function Dashboard({
 
       <section className="grid lg:grid-cols-[1.1fr_0.9fr] gap-5">
         <div className="panel-plate px-8 py-14 sm:px-12 sm:py-16 flex flex-col justify-center">
-          <p className="text-xs uppercase tracking-[0.16em] text-mist mb-3">{today}</p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3">
+            <span className="text-xs uppercase tracking-[0.16em] text-mist">{today}</span>
+            {weather && (
+              <span className="flex items-center gap-1.5 text-xs text-ink-soft">
+                <span className="text-mist">·</span>
+                <WeatherIcon icon={weather.icon} size={14} />
+                {Math.round(weather.tempC)}°C · {weather.condition}
+                {location ? ` · ${location}` : ""}
+              </span>
+            )}
+          </div>
           <h1 className="font-display text-5xl sm:text-[60px] leading-[0.98] tracking-tight max-w-xl">
             Your day, thoughtfully picked.
           </h1>
@@ -188,13 +198,6 @@ export default function Dashboard({
             alt=""
             className="w-full h-full object-cover absolute inset-0"
           />
-          {weather && (
-            <p className="absolute left-4 top-4 flex items-center gap-1.5 text-xs bg-card/90 backdrop-blur-sm rounded-full px-3.5 py-2 text-ink-soft">
-              <WeatherIcon icon={weather.icon} size={15} />
-              {Math.round(weather.tempC)}°C · {weather.condition}
-              {location ? ` · ${location}` : ""}
-            </p>
-          )}
         </div>
       </section>
 
