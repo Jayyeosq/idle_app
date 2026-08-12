@@ -5,6 +5,7 @@ import Dial from "@/components/Dial";
 import RecommendationCard from "@/components/RecommendationCard";
 import FilterPanel from "@/components/FilterPanel";
 import ProfileMenu from "@/components/ProfileMenu";
+import ClockBadge from "@/components/ClockBadge";
 import type { Recommendation, WeatherInfo, RecommendationFilters, OnboardingData } from "@/lib/types";
 
 type Status = "idle" | "locating" | "thinking" | "error";
@@ -129,7 +130,10 @@ export default function Dashboard({
           <Dial size={22} spinning={thinking} />
           <span className="font-medium text-lg tracking-wide">IDLE</span>
         </div>
-        <ProfileMenu email={email} preferences={preferences} />
+        <div className="flex items-center gap-3">
+          <ClockBadge />
+          <ProfileMenu email={email} preferences={preferences} />
+        </div>
       </header>
 
       <section className="grid lg:grid-cols-[1.1fr_0.9fr] gap-5">
