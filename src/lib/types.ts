@@ -13,9 +13,20 @@ export type LocationInfo = {
   label: string; // human-readable place, e.g. "Sengkang, Singapore"
 };
 
+export type WeatherIconKey =
+  | "clear"
+  | "partly-cloudy"
+  | "cloudy"
+  | "fog"
+  | "drizzle"
+  | "rain"
+  | "snow"
+  | "thunderstorm";
+
 export type WeatherInfo = {
   tempC: number;
   condition: string; // short description, e.g. "Light rain"
+  icon: WeatherIconKey;
 };
 
 export type Recommendation = {

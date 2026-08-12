@@ -1,28 +1,30 @@
-import type { WeatherInfo } from "./types";
+import type { WeatherInfo, WeatherIconKey } from "./types";
 
-// Minimal mapping of Open-Meteo's WMO weather codes to short descriptions.
-const WMO_CODES: Record<number, string> = {
-  0: "Clear sky",
-  1: "Mostly clear",
-  2: "Partly cloudy",
-  3: "Overcast",
-  45: "Fog",
-  48: "Fog",
-  51: "Light drizzle",
-  53: "Drizzle",
-  55: "Heavy drizzle",
-  61: "Light rain",
-  63: "Rain",
-  65: "Heavy rain",
-  71: "Light snow",
-  73: "Snow",
-  75: "Heavy snow",
-  80: "Rain showers",
-  81: "Rain showers",
-  82: "Violent rain showers",
-  95: "Thunderstorm",
-  96: "Thunderstorm with hail",
-  99: "Thunderstorm with hail",
+// Minimal mapping of Open-Meteo's WMO weather codes to a short description
+// and an icon key. Kept as one table (not two parallel ones) so the label
+// and the icon can't drift out of sync with each other.
+const WMO_CODES: Record<number, { label: string; icon: WeatherIconKey }> = {
+  0: { label: "Clear sky", icon: "clear" },
+  1: { label: "Mostly clear", icon: "clear" },
+  2: { label: "Partly cloudy", icon: "partly-cloudy" },
+  3: { label: "Overcast", icon: "cloudy" },
+  45: { label: "Fog", icon: "fog" },
+  48: { label: "Fog", icon: "fog" },
+  51: { label: "Light drizzle", icon: "drizzle" },
+  53: { label: "Drizzle", icon: "drizzle" },
+  55: { label: "Heavy drizzle", icon: "drizzle" },
+  61: { label: "Light rain", icon: "rain" },
+  63: { label: "Rain", icon: "rain" },
+  65: { label: "Heavy rain", icon: "rain" },
+  71: { label: "Light snow", icon: "snow" },
+  73: { label: "Snow", icon: "snow" },
+  75: { label: "Heavy snow", icon: "snow" },
+  80: { label: "Rain showers", icon: "rain" },
+  81: { label: "Rain showers", icon: "rain" },
+  82: { label: "Violent rain showers", icon: "rain" },
+  95: { label: "Thunderstorm", icon: "thunderstorm" },
+  96: { label: "Thunderstorm with hail", icon: "thunderstorm" },
+  99: { label: "Thunderstorm with hail", icon: "thunderstorm" },
 };
 
 /** Current weather for a lat/lon via Open-Meteo's free, keyless API. */
@@ -34,9 +36,11 @@ export async function getCurrentWeather(lat: number, lon: number): Promise<Weath
     const data = await res.json();
     const current = data.current;
     if (!current) return null;
+    const match = WMO_CODES[current.weather_code] ?? { label: "Unknown conditions", icon: "cloudy" as const };
     return {
       tempC: current.temperature_2m,
-      condition: WMO_CODES[current.weather_code] ?? "Unknown conditions",
+      condition: match.label,
+      icon: match.icon,
     };
   } catch {
     return null;

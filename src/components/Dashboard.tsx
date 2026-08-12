@@ -6,6 +6,7 @@ import RecommendationCard from "@/components/RecommendationCard";
 import FilterPanel from "@/components/FilterPanel";
 import ProfileMenu from "@/components/ProfileMenu";
 import ClockBadge from "@/components/ClockBadge";
+import WeatherIcon from "@/components/WeatherIcon";
 import type { Recommendation, WeatherInfo, RecommendationFilters, OnboardingData } from "@/lib/types";
 
 type Status = "idle" | "locating" | "thinking" | "error";
@@ -188,7 +189,8 @@ export default function Dashboard({
             className="w-full h-full object-cover absolute inset-0"
           />
           {weather && (
-            <p className="absolute left-4 top-4 text-xs bg-card/90 backdrop-blur-sm rounded-full px-3.5 py-2 text-ink-soft">
+            <p className="absolute left-4 top-4 flex items-center gap-1.5 text-xs bg-card/90 backdrop-blur-sm rounded-full px-3.5 py-2 text-ink-soft">
+              <WeatherIcon icon={weather.icon} size={15} />
               {Math.round(weather.tempC)}°C · {weather.condition}
               {location ? ` · ${location}` : ""}
             </p>
