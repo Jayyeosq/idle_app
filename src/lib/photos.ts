@@ -10,12 +10,16 @@ import type { Recommendation } from "./types";
  * covers moderate traffic).
  *
  * Also replaces the LLM's guessed distanceHint with a computed one
- * whenever we have a confirmed place match. The prompt asks the model for
- * a distance string like "~1.2 km, 10 min walk", but the model has no
- * actual geodata — it's an estimate from general knowledge, which can be
- * meaningfully wrong. Once we have the venue's real coordinates (this
- * file) and the user's real coordinates (already available from
- * Geolocation), that's a straightforward calculation instead of a guess.
+ * whenever we have a confirmed place match, and enforces the user's
+ * maxDistanceKm filter as a real hard cutoff rather than just a prompt
+ * suggestion. The prompt asks the model for a distance string like
+ * "~1.2 km, 10 min walk" and to respect a distance filter if one was set,
+ * but the model has no actual geodata — it's an estimate from general
+ * knowledge, which can be meaningfully wrong (or simply not followed
+ * closely). Once we have the venue's real coordinates (this file) and the
+ * user's real coordinates (already available from Geolocation), both the
+ * displayed distance and the filter enforcement become a straightforward
+ * calculation instead of a guess.
  *
  * Two calls instead of one: Text Search (New) has a documented tendency to
  * omit fields like photos even when they're in the field mask and the
@@ -166,28 +170,45 @@ function formatDistanceHint(km: number): string {
  */
 export async function attachPhotos(
   recs: Recommendation[],
-  location?: { lat: number; lon: number }
+  location?: { lat: number; lon: number },
+  maxDistanceKm?: number
 ): Promise<Recommendation[]> {
   const withExtras = await Promise.all(
     recs.map(async (rec) => {
       const extras = await lookupPlaceExtras(rec.name, location);
-      const distanceHint =
+      const distanceKm =
         extras.coords && location
-          ? formatDistanceHint(haversineKm(location.lat, location.lon, extras.coords.lat, extras.coords.lon))
-          : rec.distanceHint; // no confirmed match — keep the LLM's guess rather than show nothing
+          ? haversineKm(location.lat, location.lon, extras.coords.lat, extras.coords.lon)
+          : null;
+      const distanceHint =
+        distanceKm !== null ? formatDistanceHint(distanceKm) : rec.distanceHint; // no confirmed match — keep the LLM's guess rather than show nothing
       return {
         rec: { ...rec, photoUrl: extras.photoUrl, mapsUrl: extras.mapsUrl, distanceHint },
         businessStatus: extras.businessStatus,
+        distanceKm,
       };
     })
   );
 
-  const filtered = withExtras.filter(({ businessStatus, rec }) => {
+  const filtered = withExtras.filter(({ businessStatus, distanceKm, rec }) => {
     const isClosed = businessStatus === "CLOSED_PERMANENTLY" || businessStatus === "CLOSED_TEMPORARILY";
     if (isClosed) {
       console.info(`[photos] Dropping "${rec.name}" — Places reports ${businessStatus}.`);
+      return false;
     }
-    return !isClosed;
+
+    // Only enforce the filter against a confirmed real distance — a
+    // recommendation with no Places match at all has no verified distance
+    // to check, and dropping it on that basis would penalize exactly the
+    // small/hidden-gem venues this app is meant to surface.
+    if (maxDistanceKm && distanceKm !== null && distanceKm > maxDistanceKm) {
+      console.info(
+        `[photos] Dropping "${rec.name}" — ${distanceKm.toFixed(1)}km exceeds the ${maxDistanceKm}km filter.`
+      );
+      return false;
+    }
+
+    return true;
   });
 
   return filtered.map(({ rec }) => rec);

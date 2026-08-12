@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  recommendations = await attachPhotos(recommendations, { lat, lon });
+  recommendations = await attachPhotos(recommendations, { lat, lon }, filters?.maxDistanceKm);
 
   const sessionId = nanoid(6);
   await appendRecommendationSession(
