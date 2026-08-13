@@ -26,6 +26,10 @@
  * that the old free-text generation could invent are no longer possible
  * to suggest. Given this app's core promise is trustworthy, genuinely
  * nearby suggestions, that's an intentional trade in favor of accuracy.
+ *
+ * For a wide distance filter, a second POPULARITY-ranked call is blended
+ * in alongside the usual DISTANCE-ranked one — see searchNearbyPlaces for
+ * why a single DISTANCE call effectively never uses a large radius.
  */
 
 export type PlaceCandidate = {
@@ -141,23 +145,17 @@ function formatDistanceHint(km: number): string {
 }
 
 /**
- * Fetches up to 20 real, open, nearby venues within radiusKm of the given
- * coordinates, ranked by distance. Returns an empty array if the key is
- * missing, the request fails, or nothing is found within range — callers
- * should treat an empty result as "couldn't build a candidate pool" and
- * degrade gracefully rather than crash.
+ * Fetches up to 20 real, open venues within radiusKm of the given
+ * coordinates for a single ranking strategy. Returns an empty array on
+ * any failure — callers degrade gracefully rather than crash.
  */
-export async function searchNearbyPlaces(
+async function fetchNearbyBatch(
+  apiKey: string,
   lat: number,
   lon: number,
-  radiusKm: number
-): Promise<PlaceCandidate[]> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) {
-    console.error("[places] GOOGLE_PLACES_API_KEY is not set — no candidates available.");
-    return [];
-  }
-
+  radiusKm: number,
+  rankPreference: "DISTANCE" | "POPULARITY"
+): Promise<any[]> {
   try {
     const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
       method: "POST",
@@ -170,7 +168,7 @@ export async function searchNearbyPlaces(
       body: JSON.stringify({
         includedTypes: CANDIDATE_TYPES,
         maxResultCount: 20,
-        rankPreference: "DISTANCE",
+        rankPreference,
         locationRestriction: {
           circle: { center: { latitude: lat, longitude: lon }, radius: radiusKm * 1000 },
         },
@@ -179,43 +177,111 @@ export async function searchNearbyPlaces(
     });
 
     if (!res.ok) {
-      console.error(`[places] searchNearby failed (${res.status}) for ${lat},${lon}:`, await res.text());
+      console.error(
+        `[places] searchNearby failed (${res.status}, rank=${rankPreference}, radius=${radiusKm}km) for ${lat},${lon}:`,
+        await res.text()
+      );
       return [];
     }
 
     const data = await res.json();
-    const places: any[] = data?.places ?? [];
-
-    const candidates: PlaceCandidate[] = [];
-    for (const p of places) {
-      const status = p.businessStatus;
-      if (status === "CLOSED_PERMANENTLY" || status === "CLOSED_TEMPORARILY") continue;
-
-      const placeLat = p.location?.latitude;
-      const placeLon = p.location?.longitude;
-      if (typeof placeLat !== "number" || typeof placeLon !== "number") continue;
-
-      const distanceKm = haversineKm(lat, lon, placeLat, placeLon);
-      const photoName = p.photos?.[0]?.name;
-
-      candidates.push({
-        id: p.id,
-        name: p.displayName?.text ?? "Unnamed place",
-        category: categoryFor(p.primaryType, p.types),
-        photoUrl: photoName
-          ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=640&key=${apiKey}`
-          : null,
-        mapsUrl: p.googleMapsUri ?? null,
-        distanceHint: formatDistanceHint(distanceKm),
-        distanceKm,
-        rating: typeof p.rating === "number" ? p.rating : null,
-        priceLevel: priceLevelToSymbol(p.priceLevel),
-      });
-    }
-
-    return candidates;
+    return data?.places ?? [];
   } catch (err) {
-    console.error(`[places] searchNearby threw for ${lat},${lon}:`, err);
+    console.error(`[places] searchNearby threw (rank=${rankPreference}, radius=${radiusKm}km) for ${lat},${lon}:`, err);
     return [];
   }
+}
+
+function toCandidate(apiKey: string, lat: number, lon: number, p: any): PlaceCandidate | null {
+  const status = p.businessStatus;
+  if (status === "CLOSED_PERMANENTLY" || status === "CLOSED_TEMPORARILY") return null;
+
+  const placeLat = p.location?.latitude;
+  const placeLon = p.location?.longitude;
+  if (typeof placeLat !== "number" || typeof placeLon !== "number") return null;
+
+  const distanceKm = haversineKm(lat, lon, placeLat, placeLon);
+  const photoName = p.photos?.[0]?.name;
+
+  return {
+    id: p.id,
+    name: p.displayName?.text ?? "Unnamed place",
+    category: categoryFor(p.primaryType, p.types),
+    photoUrl: photoName
+      ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=640&key=${apiKey}`
+      : null,
+    mapsUrl: p.googleMapsUri ?? null,
+    distanceHint: formatDistanceHint(distanceKm),
+    distanceKm,
+    rating: typeof p.rating === "number" ? p.rating : null,
+    priceLevel: priceLevelToSymbol(p.priceLevel),
+  };
+}
+
+// Above this, a single DISTANCE-ranked call effectively never uses the
+// wider radius — see searchNearbyPlaces below for why.
+const WIDE_RADIUS_THRESHOLD_KM = 10;
+
+/**
+ * Fetches real, open, nearby venues within radiusKm of the given
+ * coordinates. Returns an empty array if the key is missing or nothing is
+ * found — callers should treat that as "couldn't build a candidate pool"
+ * and degrade gracefully rather than crash.
+ *
+ * For a small radius, this is one DISTANCE-ranked call — genuinely the
+ * nearest real places, which is exactly right for the common "something
+ * spontaneous nearby" case.
+ *
+ * For a wide radius, DISTANCE ranking alone is misleading: it always
+ * returns the nearest matches first, and in any reasonably dense area
+ * there are usually 20+ real places within just a couple of km — so the
+ * outer edge of a 50km radius is essentially never reached, no matter how
+ * wide the filter is set. Google's Places API has no "ring" (inner+outer
+ * radius) search to force genuine spread, so instead a second call across
+ * the FULL requested radius is added, ranked by POPULARITY instead of
+ * distance — fame doesn't correlate with proximity the way distance
+ * ranking does, so it has a real (if not literally guaranteed) chance of
+ * surfacing farther, notable places the pure-nearest call would never
+ * include. Results from both calls are merged and deduped by place id.
+ */
+export async function searchNearbyPlaces(
+  lat: number,
+  lon: number,
+  radiusKm: number
+): Promise<PlaceCandidate[]> {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) {
+    console.error("[places] GOOGLE_PLACES_API_KEY is not set — no candidates available.");
+    return [];
+  }
+
+  const batches = await Promise.all(
+    radiusKm > WIDE_RADIUS_THRESHOLD_KM
+      ? [
+          fetchNearbyBatch(apiKey, lat, lon, radiusKm, "DISTANCE"),
+          fetchNearbyBatch(apiKey, lat, lon, radiusKm, "POPULARITY"),
+        ]
+      : [fetchNearbyBatch(apiKey, lat, lon, radiusKm, "DISTANCE")]
+  );
+
+  const seenIds = new Set<string>();
+  const candidates: PlaceCandidate[] = [];
+
+  for (const places of batches) {
+    for (const p of places) {
+      if (!p.id || seenIds.has(p.id)) continue; // dedupe across the two calls
+      const candidate = toCandidate(apiKey, lat, lon, p);
+      if (!candidate) continue;
+      seenIds.add(p.id);
+      candidates.push(candidate);
+    }
+  }
+
+  // Sorted nearest-first for a sensible reading order in the LLM's
+  // candidate list — NOT truncated afterward, since slicing back down by
+  // distance would throw away exactly the farther popularity-sourced
+  // results this whole blend exists to add.
+  candidates.sort((a, b) => a.distanceKm - b.distanceKm);
+
+  return candidates;
 }
