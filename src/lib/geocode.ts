@@ -1,13 +1,22 @@
 import type { LocationInfo } from "./types";
 
+export type GeocodeResult = { label: string; countryCode: string | null };
+
 /**
  * Turns lat/lon from the browser's Geolocation API into a human-readable
- * label using OpenStreetMap's free Nominatim service. No API key needed,
- * but Nominatim's usage policy asks for an identifying contact in the
- * User-Agent — set NOMINATIM_CONTACT_EMAIL in .env before deploying at any
- * real volume. For production traffic, consider a paid geocoder instead.
+ * label AND an ISO 3166-1 alpha-2 country code, using OpenStreetMap's free
+ * Nominatim service. No API key needed, but Nominatim's usage policy asks
+ * for an identifying contact in the User-Agent — set
+ * NOMINATIM_CONTACT_EMAIL in .env before deploying at any real volume.
+ * For production traffic, consider a paid geocoder instead.
+ *
+ * The country code exists specifically to filter out cross-border
+ * recommendations at a wide distance filter (see lib/places.ts) — a
+ * straight-line distance can be technically "within range" while crossing
+ * an international border, which is a meaningfully bigger ask than the
+ * same distance within one country.
  */
-export async function reverseGeocode(lat: number, lon: number): Promise<string> {
+export async function reverseGeocode(lat: number, lon: number): Promise<GeocodeResult> {
   const contact = process.env.NOMINATIM_CONTACT_EMAIL || "no-contact-set@example.com";
   const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=14&addressdetails=1`;
 
@@ -23,9 +32,11 @@ export async function reverseGeocode(lat: number, lon: number): Promise<string> 
       addr.neighbourhood || addr.suburb || addr.town || addr.village || addr.city_district;
     const city = addr.city || addr.town || addr.county;
     const country = addr.country;
-    return [place, city, country].filter(Boolean).join(", ") || data.display_name || "your location";
+    const label = [place, city, country].filter(Boolean).join(", ") || data.display_name || "your location";
+    const countryCode = typeof addr.country_code === "string" ? addr.country_code.toUpperCase() : null;
+    return { label, countryCode };
   } catch {
-    return "your location";
+    return { label: "your location", countryCode: null };
   }
 }
 

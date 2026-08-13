@@ -43,6 +43,7 @@ export type PlaceCandidate = {
   distanceKm: number;
   rating: number | null;
   priceLevel: "$" | "$$" | "$$$" | null;
+  countryCode: string | null;
 };
 
 // A broad spread across the app's usual interest categories (food, nature,
@@ -188,7 +189,7 @@ async function fetchNearbyBatch(
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
         "X-Goog-FieldMask":
-          "places.id,places.displayName,places.primaryType,places.types,places.photos,places.googleMapsUri,places.businessStatus,places.location,places.rating,places.priceLevel",
+          "places.id,places.displayName,places.primaryType,places.types,places.photos,places.googleMapsUri,places.businessStatus,places.location,places.rating,places.priceLevel,places.addressComponents",
       },
       body: JSON.stringify({
         includedTypes: CANDIDATE_TYPES,
@@ -217,6 +218,11 @@ async function fetchNearbyBatch(
   }
 }
 
+function countryCodeFor(addressComponents?: any[]): string | null {
+  const countryComponent = addressComponents?.find((c) => c.types?.includes("country"));
+  return countryComponent?.shortText ? String(countryComponent.shortText).toUpperCase() : null;
+}
+
 function toCandidate(apiKey: string, lat: number, lon: number, p: any): PlaceCandidate | null {
   const status = p.businessStatus;
   if (status === "CLOSED_PERMANENTLY" || status === "CLOSED_TEMPORARILY") return null;
@@ -240,6 +246,7 @@ function toCandidate(apiKey: string, lat: number, lon: number, p: any): PlaceCan
     distanceKm,
     rating: typeof p.rating === "number" ? p.rating : null,
     priceLevel: priceLevelToSymbol(p.priceLevel),
+    countryCode: countryCodeFor(p.addressComponents),
   };
 }
 
@@ -286,6 +293,14 @@ const SEED_BEARINGS_DEG = [0, 90, 180, 270];
  * coordinates (not the seed's) and dropped if it's actually outside the
  * requested radius — a seed's own local circle can extend slightly beyond
  * the user's real radius, so this keeps the final guarantee exact.
+ *
+ * Each candidate carries its own countryCode (ISO 3166-1 alpha-2). This
+ * function doesn't filter by it — that happens in the API route, after
+ * this call and the user's own reverseGeocode-derived country resolve in
+ * parallel, rather than forcing this function to wait on that result
+ * first. See app/api/recommend/route.ts for why: a straight-line distance
+ * can be technically "within range" while crossing an international
+ * border, which is a much bigger ask than the same distance domestically.
  */
 export async function searchNearbyPlaces(
   lat: number,

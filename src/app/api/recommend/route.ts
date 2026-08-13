@@ -23,7 +23,9 @@ const BodySchema = z.object({
   lat: z.number(),
   lon: z.number(),
   // Set when coordinates came from the manual-location fallback (already
-  // geocoded client-side), so we skip a redundant reverse-geocode call.
+  // forward-geocoded client-side) — used for display text, but country is
+  // still resolved fresh server-side below (see the reverseGeocode call),
+  // since cross-border filtering needs it regardless of label source.
   label: z.string().optional(),
   filters: FiltersSchema,
 });
@@ -45,13 +47,38 @@ export async function POST(req: NextRequest) {
   const { lat, lon, filters } = parsed.data;
   const maxDistanceKm = filters?.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM;
 
-  const [label, weather, candidates] = await Promise.all([
-    parsed.data.label ? Promise.resolve(parsed.data.label) : reverseGeocode(lat, lon),
+  // All three run in parallel — reverseGeocode is always called now (even
+  // when the client already supplied a label) specifically to get a
+  // reliable country code for the cross-border filter below, without
+  // forcing searchNearbyPlaces to wait on it first.
+  const [geocodeResult, weather, candidates] = await Promise.all([
+    reverseGeocode(lat, lon),
     getCurrentWeather(lat, lon),
     searchNearbyPlaces(lat, lon, maxDistanceKm),
   ]);
 
-  if (candidates.length === 0) {
+  const label = parsed.data.label ?? geocodeResult.label;
+  const userCountryCode = geocodeResult.countryCode;
+
+  // A straight-line distance can be technically "within range" while
+  // crossing an international border — a much bigger ask than the same
+  // distance domestically (different currency, passport/customs, phone
+  // roaming). Only enforced when both the user's and a candidate's
+  // country are confirmed; unknown on either side fails open rather than
+  // dropping a possibly-valid result, same philosophy as the closed-venue
+  // filter in lib/places.ts.
+  const inCountryCandidates = userCountryCode
+    ? candidates.filter((c) => !c.countryCode || c.countryCode === userCountryCode)
+    : candidates;
+
+  const droppedCrossBorder = candidates.length - inCountryCandidates.length;
+  if (droppedCrossBorder > 0) {
+    console.info(
+      `[recommend] Dropped ${droppedCrossBorder} cross-border candidate(s) — user country ${userCountryCode}.`
+    );
+  }
+
+  if (inCountryCandidates.length === 0) {
     return NextResponse.json(
       {
         error:
@@ -75,7 +102,7 @@ export async function POST(req: NextRequest) {
       localTime,
       weather,
       filters,
-      candidates,
+      candidates: inCountryCandidates,
     });
   } catch (err: any) {
     return NextResponse.json(
