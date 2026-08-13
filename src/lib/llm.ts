@@ -1,21 +1,28 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { LocationInfo, WeatherInfo, Recommendation, RecommendationFilters } from "./types";
-import { DEFAULT_MAX_DISTANCE_KM } from "./constants";
+import type { PlaceCandidate } from "./places";
 
-const RecommendationSchema = z.object({
-  name: z.string(),
-  category: z.string(),
+/**
+ * Selects and personalizes recommendations from a pool of already-verified
+ * real, nearby, open candidates (see lib/places.ts), rather than
+ * generating venue names from scratch. The model's job here is narrower
+ * and safer than before: pick the best-matching candidates for this
+ * user's taste profile from a numbered list, and write a short reason for
+ * each — it can no longer invent a name, guess a distance, or suggest
+ * somewhere closed, because everything it can choose from is already
+ * confirmed real, nearby, and open before it ever runs.
+ */
+
+const SelectionSchema = z.object({
+  number: z.number().int(),
   why: z.string(),
   estimatedTime: z.string(),
-  distanceHint: z.string(),
 });
 
-// Bounds the hard validation gate to whatever the largest preset the UI
-// offers is (see COUNT_OPTIONS in lib/constants.ts) — a backstop in case
-// the model overshoots the count instruction below, not the primary
-// control on count itself.
-const MAX_RECOMMENDATIONS = 8;
+const SelectResponseSchema = z.object({
+  selections: z.array(SelectionSchema).min(1),
+});
 
 function buildSystemPrompt(count: number): string {
   return `You are the recommendation engine behind IDLE, an app that suggests what
@@ -26,47 +33,61 @@ current situation. You will be given:
    preferences plus a running history of past suggestions and whether the
    user liked or passed on each one.
 2. Their current location, local time, and (if available) the weather.
+3. A numbered list of REAL, currently-open, nearby places — already
+   confirmed to exist and to be within the user's distance range. This
+   list is ground truth, not a suggestion for you to second-guess.
 
 Study the History section for patterns — repeated likes suggest what to lean
 into, repeated passes suggest what to avoid — but don't just repeat past
 suggestions; use them as signal about taste, not a list to reuse verbatim.
 
+Your job is to SELECT the best ${count} candidates from the numbered list for
+this specific user right now, and write a short personalized reason for each
+— never invent a place that isn't on the list, and never renumber or
+relabel one. If the weather makes an outdoor venue unpleasant, prefer indoor
+candidates from the list instead. If fewer than ${count} candidates are a
+good fit, select fewer rather than forcing a weak match — quality over
+hitting an exact count.
+
 Respond with ONLY a JSON object (no markdown fences, no commentary) matching
 exactly this shape:
 
 {
-  "recommendations": [
+  "selections": [
     {
-      "name": "string, a specific place or activity, not a generic category",
-      "category": "short label, e.g. food, nature, art, nightlife, rest",
-      "why": "one or two sentences tying this to the user's profile and current context",
-      "estimatedTime": "short duration string, e.g. '45 min'",
-      "distanceHint": "short distance/travel string, e.g. '~1.2 km, 10 min walk'"
+      "number": <integer — must be one of the numbers from the candidate list>,
+      "why": "one or two sentences tying this specific place to the user's profile and current context",
+      "estimatedTime": "short duration string for how long to spend there, e.g. '45 min'"
     }
   ]
+}`;
 }
 
-Return exactly ${count} recommendations — fewer only if the location genuinely
-can't support that many distinct, plausible options. Prefer specific,
-plausible venues or activities appropriate to the stated location over
-generic filler. If the weather makes an outdoor activity unpleasant, favor
-indoor alternatives.`;
+function formatCandidateList(candidates: PlaceCandidate[]): string {
+  return candidates
+    .map((c, i) => {
+      const bits = [c.category, c.distanceHint];
+      if (c.rating !== null) bits.push(`${c.rating.toFixed(1)}★`);
+      if (c.priceLevel) bits.push(c.priceLevel);
+      return `${i + 1}. ${c.name} — ${bits.join(", ")}`;
+    })
+    .join("\n");
 }
 
-const ResponseSchema = z.object({
-  recommendations: z.array(RecommendationSchema).min(1).max(MAX_RECOMMENDATIONS),
-});
-
-export async function generateRecommendations(opts: {
+export async function selectRecommendations(opts: {
   profileMarkdown: string;
   location: LocationInfo;
   localTime: string;
   weather: WeatherInfo | null;
   filters?: RecommendationFilters;
+  candidates: PlaceCandidate[];
 }): Promise<Recommendation[]> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     throw new Error("DEEPSEEK_API_KEY is not set. Add it to .env to enable recommendations.");
+  }
+  if (opts.candidates.length === 0) {
+    return [];
   }
 
   const model = process.env.DEEPSEEK_MODEL || "deepseek-chat";
@@ -76,17 +97,17 @@ export async function generateRecommendations(opts: {
     : "unavailable";
 
   const f = opts.filters;
-  const count = f?.count ?? 5;
+  // Never ask for more than the pool actually has — avoids the model
+  // being forced to pad out weak selections just to hit a count.
+  const count = Math.min(f?.count ?? 5, opts.candidates.length);
 
   const filterLines: string[] = [];
   if (f?.interests?.length) filterLines.push(`Interests: ${f.interests.join(", ")}`);
   if (f?.budget) filterLines.push(`Budget: ${f.budget}`);
   if (f?.pace) filterLines.push(`Pace: ${f.pace}`);
-  // Always explicit, never silently omitted — an unstated distance left
-  // the model free to reach for famous-but-far landmarks regardless of
-  // actual proximity to the user.
-  filterLines.push(`Max travel distance: ${f?.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM} km`);
-  const filterBlock = `\n## Filters for this request only\n\nApply these for this request, preferring them over the profile's saved\npreferences wherever the two conflict, but do not treat them as a change\nto the user's underlying taste profile. Distance reflects either the\nuser's chosen limit or IDLE's default preference for nearby, spontaneous\nsuggestions:\n\n${filterLines.map((l) => `- ${l}`).join("\n")}\n`;
+  const filterBlock = filterLines.length
+    ? `\n## Filters for this request only\n\nApply these when selecting, preferring them over the profile's saved\npreferences wherever the two conflict, but do not treat them as a change\nto the user's underlying taste profile:\n\n${filterLines.map((l) => `- ${l}`).join("\n")}\n`
+    : "";
 
   const userMessage = `## User profile file
 
@@ -98,7 +119,11 @@ ${opts.profileMarkdown}
 - Local time: ${opts.localTime}
 - Weather: ${weatherLine}
 ${filterBlock}
-Generate this user's IDLE recommendations for right now.`;
+## Nearby real places to choose from
+
+${formatCandidateList(opts.candidates)}
+
+Select and personalize ${count} of the above for this user right now.`;
 
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
@@ -108,9 +133,10 @@ Generate this user's IDLE recommendations for right now.`;
     },
     body: JSON.stringify({
       model,
-      // Scales with count so an 8-recommendation request doesn't get cut
-      // off mid-JSON — roughly 250 tokens per item plus fixed overhead.
-      max_tokens: 400 + count * 250,
+      // Much shorter output than the old generate-from-scratch prompt —
+      // only "why" + "estimatedTime" per pick now, not a full invented
+      // record — so this needs meaningfully fewer tokens than before.
+      max_tokens: 300 + count * 120,
       messages: [
         { role: "system", content: buildSystemPrompt(count) },
         { role: "user", content: userMessage },
@@ -133,10 +159,33 @@ Generate this user's IDLE recommendations for right now.`;
     throw new Error("DeepSeek returned invalid JSON.");
   }
 
-  const result = ResponseSchema.safeParse(parsed);
+  const result = SelectResponseSchema.safeParse(parsed);
   if (!result.success) {
     throw new Error("DeepSeek returned an unexpected shape.");
   }
 
-  return result.data.recommendations.map((r) => ({ id: nanoid(8), ...r }));
+  // Defensive against the model returning an out-of-range or duplicate
+  // number despite instructions — silently drop invalid picks rather than
+  // crash the request over a model slip-up.
+  const seen = new Set<number>();
+  const recommendations: Recommendation[] = [];
+  for (const sel of result.data.selections) {
+    if (seen.has(sel.number)) continue;
+    const candidate = opts.candidates[sel.number - 1];
+    if (!candidate) continue;
+    seen.add(sel.number);
+
+    recommendations.push({
+      id: nanoid(8),
+      name: candidate.name,
+      category: candidate.category,
+      why: sel.why,
+      estimatedTime: sel.estimatedTime,
+      distanceHint: candidate.distanceHint,
+      photoUrl: candidate.photoUrl,
+      mapsUrl: candidate.mapsUrl,
+    });
+  }
+
+  return recommendations;
 }

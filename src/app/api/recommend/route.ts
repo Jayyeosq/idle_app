@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { nanoid } from "nanoid";
 import { getSession } from "@/lib/session";
 import { readProfile, appendRecommendationSession } from "@/lib/profile";
 import { reverseGeocode } from "@/lib/geocode";
 import { getCurrentWeather } from "@/lib/weather";
-import { generateRecommendations } from "@/lib/llm";
-import { attachPhotos } from "@/lib/photos";
+import { selectRecommendations } from "@/lib/llm";
+import { searchNearbyPlaces } from "@/lib/places";
 import { DEFAULT_MAX_DISTANCE_KM } from "@/lib/constants";
+import { nanoid } from "nanoid";
 
 const FiltersSchema = z
   .object({
@@ -43,10 +43,23 @@ export async function POST(req: NextRequest) {
   }
 
   const { lat, lon, filters } = parsed.data;
-  const [label, weather] = await Promise.all([
+  const maxDistanceKm = filters?.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM;
+
+  const [label, weather, candidates] = await Promise.all([
     parsed.data.label ? Promise.resolve(parsed.data.label) : reverseGeocode(lat, lon),
     getCurrentWeather(lat, lon),
+    searchNearbyPlaces(lat, lon, maxDistanceKm),
   ]);
+
+  if (candidates.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "Couldn't find any nearby places within that distance right now. Try widening your distance filter.",
+      },
+      { status: 502 }
+    );
+  }
 
   const localTime = new Date().toLocaleString("en-US", {
     weekday: "long",
@@ -56,12 +69,13 @@ export async function POST(req: NextRequest) {
 
   let recommendations;
   try {
-    recommendations = await generateRecommendations({
+    recommendations = await selectRecommendations({
       profileMarkdown,
       location: { lat, lon, label },
       localTime,
       weather,
       filters,
+      candidates,
     });
   } catch (err: any) {
     return NextResponse.json(
@@ -69,8 +83,6 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
-
-  recommendations = await attachPhotos(recommendations, { lat, lon }, filters?.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM);
 
   const sessionId = nanoid(6);
   await appendRecommendationSession(
