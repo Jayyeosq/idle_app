@@ -7,6 +7,7 @@ import { reverseGeocode } from "@/lib/geocode";
 import { getCurrentWeather } from "@/lib/weather";
 import { generateRecommendations } from "@/lib/llm";
 import { attachPhotos } from "@/lib/photos";
+import { DEFAULT_MAX_DISTANCE_KM } from "@/lib/constants";
 
 const FiltersSchema = z
   .object({
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  recommendations = await attachPhotos(recommendations, { lat, lon }, filters?.maxDistanceKm);
+  recommendations = await attachPhotos(recommendations, { lat, lon }, filters?.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM);
 
   const sessionId = nanoid(6);
   await appendRecommendationSession(

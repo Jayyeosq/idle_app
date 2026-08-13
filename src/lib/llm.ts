@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { LocationInfo, WeatherInfo, Recommendation, RecommendationFilters } from "./types";
+import { DEFAULT_MAX_DISTANCE_KM } from "./constants";
 
 const RecommendationSchema = z.object({
   name: z.string(),
@@ -81,10 +82,11 @@ export async function generateRecommendations(opts: {
   if (f?.interests?.length) filterLines.push(`Interests: ${f.interests.join(", ")}`);
   if (f?.budget) filterLines.push(`Budget: ${f.budget}`);
   if (f?.pace) filterLines.push(`Pace: ${f.pace}`);
-  if (f?.maxDistanceKm) filterLines.push(`Max travel distance: ${f.maxDistanceKm} km`);
-  const filterBlock = filterLines.length
-    ? `\n## Filters for this request only\n\nThe user set these just for this request — apply them and prefer them\nover the profile's saved preferences wherever the two conflict, but do not\ntreat them as a change to the user's underlying taste profile:\n\n${filterLines.map((l) => `- ${l}`).join("\n")}\n`
-    : "";
+  // Always explicit, never silently omitted — an unstated distance left
+  // the model free to reach for famous-but-far landmarks regardless of
+  // actual proximity to the user.
+  filterLines.push(`Max travel distance: ${f?.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM} km`);
+  const filterBlock = `\n## Filters for this request only\n\nApply these for this request, preferring them over the profile's saved\npreferences wherever the two conflict, but do not treat them as a change\nto the user's underlying taste profile. Distance reflects either the\nuser's chosen limit or IDLE's default preference for nearby, spontaneous\nsuggestions:\n\n${filterLines.map((l) => `- ${l}`).join("\n")}\n`;
 
   const userMessage = `## User profile file
 

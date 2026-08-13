@@ -16,3 +16,12 @@ export const INTEREST_OPTIONS = [
 export const BUDGET_OPTIONS = ["$", "$$", "$$$"] as const;
 export const PACE_OPTIONS = ["chill", "balanced", "packed"] as const;
 export const COUNT_OPTIONS = [3, 5, 8] as const;
+
+// Applied whenever the user hasn't explicitly set a distance filter — a
+// spontaneous "what to do right now" app should default to genuinely
+// nearby suggestions, not leave the model free to reach for famous
+// landmarks regardless of actual distance. Used consistently by both the
+// LLM prompt (lib/llm.ts) and the real hard-filter enforcement
+// (lib/photos.ts), and matches the FilterPanel slider's resting position
+// so what the UI implies and what's actually enforced stay in sync.
+export const DEFAULT_MAX_DISTANCE_KM = 5;

@@ -1,6 +1,6 @@
 "use client";
 
-import { INTEREST_OPTIONS, BUDGET_OPTIONS, PACE_OPTIONS, COUNT_OPTIONS } from "@/lib/constants";
+import { INTEREST_OPTIONS, BUDGET_OPTIONS, PACE_OPTIONS, COUNT_OPTIONS, DEFAULT_MAX_DISTANCE_KM } from "@/lib/constants";
 import type { RecommendationFilters } from "@/lib/types";
 
 /**
@@ -139,7 +139,7 @@ export default function FilterPanel({
             <label htmlFor="filter-radius" className="block text-xs text-mist mb-2">
               Max distance{" "}
               <span className="text-ink">
-                {value.maxDistanceKm ? `${value.maxDistanceKm} km` : "default"}
+                {value.maxDistanceKm ? `${value.maxDistanceKm} km` : `${DEFAULT_MAX_DISTANCE_KM} km (default)`}
               </span>
             </label>
             <input
@@ -147,7 +147,7 @@ export default function FilterPanel({
               type="range"
               min={1}
               max={50}
-              value={value.maxDistanceKm ?? 5}
+              value={value.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM}
               onChange={(e) => onChange({ ...value, maxDistanceKm: Number(e.target.value) })}
               className="w-full accent-ink"
             />
