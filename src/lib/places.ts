@@ -27,9 +27,10 @@
  * to suggest. Given this app's core promise is trustworthy, genuinely
  * nearby suggestions, that's an intentional trade in favor of accuracy.
  *
- * For a wide distance filter, a second POPULARITY-ranked call is blended
- * in alongside the usual DISTANCE-ranked one — see searchNearbyPlaces for
- * why a single DISTANCE call effectively never uses a large radius.
+ * For a wide distance filter, additional searches are run centered at
+ * points genuinely far from the user (not just the same center re-ranked)
+ * — see searchNearbyPlaces for why, and for a note on an earlier attempt
+ * that didn't actually work.
  */
 
 export type PlaceCandidate = {
@@ -124,6 +125,30 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   const dLon = toRad(lon2 - lon1);
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Given a start point, a compass bearing (0° = north, 90° = east), and a
+ * distance, returns the destination coordinate — standard spherical
+ * "destination point given distance and bearing" formula. Used to place
+ * seed search centers genuinely far from the user (see searchNearbyPlaces).
+ */
+function destinationPoint(
+  lat: number,
+  lon: number,
+  bearingDeg: number,
+  distanceKm: number
+): { lat: number; lon: number } {
+  const R = 6371;
+  const δ = distanceKm / R;
+  const θ = (bearingDeg * Math.PI) / 180;
+  const φ1 = (lat * Math.PI) / 180;
+  const λ1 = (lon * Math.PI) / 180;
+
+  const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
+  const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1), Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
+
+  return { lat: (φ2 * 180) / Math.PI, lon: (λ2 * 180) / Math.PI };
 }
 
 /**
@@ -222,6 +247,14 @@ function toCandidate(apiKey: string, lat: number, lon: number, p: any): PlaceCan
 // wider radius — see searchNearbyPlaces below for why.
 const WIDE_RADIUS_THRESHOLD_KM = 10;
 
+// Compass bearings for seed search centers, evenly spaced. 4 rather than
+// a denser ring keeps the extra API cost bounded — each one is a full
+// Nearby Search call. Some directions inevitably land somewhere sparse
+// (open water, a border) for any given user location; that's an accepted
+// limitation of a general-purpose approach that has to work anywhere, not
+// something tuned per city.
+const SEED_BEARINGS_DEG = [0, 90, 180, 270];
+
 /**
  * Fetches real, open, nearby venues within radiusKm of the given
  * coordinates. Returns an empty array if the key is missing or nothing is
@@ -232,17 +265,27 @@ const WIDE_RADIUS_THRESHOLD_KM = 10;
  * nearest real places, which is exactly right for the common "something
  * spontaneous nearby" case.
  *
- * For a wide radius, DISTANCE ranking alone is misleading: it always
- * returns the nearest matches first, and in any reasonably dense area
- * there are usually 20+ real places within just a couple of km — so the
- * outer edge of a 50km radius is essentially never reached, no matter how
- * wide the filter is set. Google's Places API has no "ring" (inner+outer
- * radius) search to force genuine spread, so instead a second call across
- * the FULL requested radius is added, ranked by POPULARITY instead of
- * distance — fame doesn't correlate with proximity the way distance
- * ranking does, so it has a real (if not literally guaranteed) chance of
- * surfacing farther, notable places the pure-nearest call would never
- * include. Results from both calls are merged and deduped by place id.
+ * For a wide radius, a single call from the user's own location doesn't
+ * work, for a subtler reason than it first appears. DISTANCE ranking
+ * always returns the nearest matches first, so that part is expected. The
+ * fix tried first was blending in a second call ranked by POPULARITY
+ * instead, on the theory that fame doesn't correlate with proximity the
+ * way distance ranking does — but in practice, Google's Nearby Search
+ * appears to still implicitly favor results near the query center even
+ * under POPULARITY ranking (confirmed empirically: a 50km-radius
+ * POPULARITY call returned 20 genuinely new, non-duplicate places, but
+ * every one of them was still within ~4km). Changing the ranking mode
+ * doesn't escape the center's pull.
+ *
+ * The only thing that actually reaches the outer part of a wide radius is
+ * moving the query CENTER itself. So for a wide radius, additional calls
+ * are made centered at points genuinely far from the user — placed at
+ * SEED_BEARINGS_DEG around a ring at roughly 65% of the requested radius,
+ * each with its own smaller local radius sized to give adjacent seeds
+ * some overlap. Every result is then re-measured against the user's TRUE
+ * coordinates (not the seed's) and dropped if it's actually outside the
+ * requested radius — a seed's own local circle can extend slightly beyond
+ * the user's real radius, so this keeps the final guarantee exact.
  */
 export async function searchNearbyPlaces(
   lat: number,
@@ -255,13 +298,26 @@ export async function searchNearbyPlaces(
     return [];
   }
 
+  const isWide = radiusKm > WIDE_RADIUS_THRESHOLD_KM;
+
+  // Primary batch: always centered on the user's real location, covering
+  // the full requested radius — this naturally supplies whatever's
+  // genuinely closest, regardless of how the seed batches below turn out.
+  const batchJobs: { centerLat: number; centerLon: number; searchRadiusKm: number; label: string }[] = [
+    { centerLat: lat, centerLon: lon, searchRadiusKm: radiusKm, label: "primary" },
+  ];
+
+  if (isWide) {
+    const seedDistanceKm = radiusKm * 0.65;
+    const seedRadiusKm = Math.min(radiusKm * 0.45, 45); // stay safely under Google's own per-call radius cap
+    for (const bearing of SEED_BEARINGS_DEG) {
+      const { lat: seedLat, lon: seedLon } = destinationPoint(lat, lon, bearing, seedDistanceKm);
+      batchJobs.push({ centerLat: seedLat, centerLon: seedLon, searchRadiusKm: seedRadiusKm, label: `seed@${bearing}°` });
+    }
+  }
+
   const batches = await Promise.all(
-    radiusKm > WIDE_RADIUS_THRESHOLD_KM
-      ? [
-          fetchNearbyBatch(apiKey, lat, lon, radiusKm, "DISTANCE"),
-          fetchNearbyBatch(apiKey, lat, lon, radiusKm, "POPULARITY"),
-        ]
-      : [fetchNearbyBatch(apiKey, lat, lon, radiusKm, "DISTANCE")]
+    batchJobs.map((job) => fetchNearbyBatch(apiKey, job.centerLat, job.centerLon, job.searchRadiusKm, "DISTANCE"))
   );
 
   const seenIds = new Set<string>();
@@ -271,9 +327,14 @@ export async function searchNearbyPlaces(
   for (const places of batches) {
     let newInThisBatch = 0;
     for (const p of places) {
-      if (!p.id || seenIds.has(p.id)) continue; // dedupe across the two calls
+      if (!p.id || seenIds.has(p.id)) continue; // dedupe across batches
+      // Distance is always computed from the user's TRUE coordinates, not
+      // whichever seed found this place — a seed's own circle can extend
+      // slightly past the user's requested radius, so anything actually
+      // beyond it gets dropped here rather than trusted just because a
+      // seed's local search happened to include it.
       const candidate = toCandidate(apiKey, lat, lon, p);
-      if (!candidate) continue;
+      if (!candidate || candidate.distanceKm > radiusKm) continue;
       seenIds.add(p.id);
       candidates.push(candidate);
       newInThisBatch++;
@@ -283,17 +344,14 @@ export async function searchNearbyPlaces(
 
   // Sorted nearest-first for a sensible reading order in the LLM's
   // candidate list — NOT truncated afterward, since slicing back down by
-  // distance would throw away exactly the farther popularity-sourced
-  // results this whole blend exists to add.
+  // distance would throw away exactly the farther seed-sourced results
+  // this whole approach exists to add.
   candidates.sort((a, b) => a.distanceKm - b.distanceKm);
 
   const distanceRange = candidates.length
     ? `${candidates[0].distanceKm.toFixed(1)}–${candidates[candidates.length - 1].distanceKm.toFixed(1)}km`
     : "n/a";
-  const batchSummary =
-    radiusKm > WIDE_RADIUS_THRESHOLD_KM
-      ? `DISTANCE batch contributed ${perBatchNewCount[0] ?? 0} new, POPULARITY batch contributed ${perBatchNewCount[1] ?? 0} new`
-      : `single DISTANCE batch (radius ${radiusKm}km ≤ ${WIDE_RADIUS_THRESHOLD_KM}km threshold)`;
+  const batchSummary = batchJobs.map((job, i) => `${job.label}=${perBatchNewCount[i] ?? 0} new`).join(", ");
   console.info(
     `[places] ${candidates.length} total candidates, range ${distanceRange}, requested radius ${radiusKm}km — ${batchSummary}`
   );
