@@ -42,6 +42,7 @@ export type PlaceCandidate = {
   distanceHint: string;
   distanceKm: number;
   rating: number | null;
+  ratingCount: number | null;
   priceLevel: "$" | "$$" | "$$$" | null;
   countryCode: string | null;
 };
@@ -189,7 +190,7 @@ async function fetchNearbyBatch(
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
         "X-Goog-FieldMask":
-          "places.id,places.displayName,places.primaryType,places.types,places.photos,places.googleMapsUri,places.businessStatus,places.location,places.rating,places.priceLevel,places.addressComponents",
+          "places.id,places.displayName,places.primaryType,places.types,places.photos,places.googleMapsUri,places.businessStatus,places.location,places.rating,places.userRatingCount,places.priceLevel,places.addressComponents",
       },
       body: JSON.stringify({
         includedTypes: CANDIDATE_TYPES,
@@ -245,6 +246,7 @@ function toCandidate(apiKey: string, lat: number, lon: number, p: any): PlaceCan
     distanceHint: formatDistanceHint(distanceKm),
     distanceKm,
     rating: typeof p.rating === "number" ? p.rating : null,
+    ratingCount: typeof p.userRatingCount === "number" ? p.userRatingCount : null,
     priceLevel: priceLevelToSymbol(p.priceLevel),
     countryCode: countryCodeFor(p.addressComponents),
   };

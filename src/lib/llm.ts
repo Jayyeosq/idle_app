@@ -66,6 +66,17 @@ closer is good enough. Give genuine, independent consideration to every
 option and select based on fit with the user's taste, not position or
 proximity.
 
+Some candidates list a rating and review count (e.g. "4.5★ from 230
+reviews") — this is a real signal from real people, not decoration. When
+multiple candidates are a similarly good fit for the user's taste, prefer
+the one with the stronger rating and higher review count; a high average
+from very few reviews is weaker evidence than a slightly lower average
+from hundreds. Candidates with no listed rating aren't necessarily worse —
+some genuinely good small or newer venues simply don't have many reviews
+yet — so don't penalize missing data, but do actively favor a well-proven
+option when it's an equally strong match. Taste-fit still comes first:
+never pick a worse fit just because it's more popular.
+
 Respond with ONLY a JSON object (no markdown fences, no commentary) matching
 exactly this shape:
 
@@ -84,7 +95,10 @@ function formatCandidateList(candidates: PlaceCandidate[]): string {
   return candidates
     .map((c, i) => {
       const bits = [c.category, c.distanceHint];
-      if (c.rating !== null) bits.push(`${c.rating.toFixed(1)}★`);
+      if (c.rating !== null) {
+        const reviews = c.ratingCount !== null ? ` from ${c.ratingCount} reviews` : "";
+        bits.push(`${c.rating.toFixed(1)}★${reviews}`);
+      }
       if (c.priceLevel) bits.push(c.priceLevel);
       return `${i + 1}. ${c.name} — ${bits.join(", ")}`;
     })
