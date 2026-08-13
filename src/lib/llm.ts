@@ -5,13 +5,14 @@ import type { PlaceCandidate } from "./places";
 
 /**
  * Selects and personalizes recommendations from a pool of already-verified
- * real, nearby, open candidates (see lib/places.ts), rather than
- * generating venue names from scratch. The model's job here is narrower
- * and safer than before: pick the best-matching candidates for this
- * user's taste profile from a numbered list, and write a short reason for
- * each — it can no longer invent a name, guess a distance, or suggest
- * somewhere closed, because everything it can choose from is already
- * confirmed real, nearby, and open before it ever runs.
+ * real, open candidates within the user's chosen distance range (see
+ * lib/places.ts), rather than generating venue names from scratch. The
+ * model's job here is narrower and safer than before: pick the
+ * best-matching candidates for this user's taste profile from a numbered
+ * list, and write a short reason for each — it can no longer invent a
+ * name, guess a distance, or suggest somewhere closed or out of range,
+ * because everything it can choose from is already confirmed real, in
+ * range, and open before it ever runs.
  */
 
 const SelectionSchema = z.object({
@@ -33,9 +34,15 @@ current situation. You will be given:
    preferences plus a running history of past suggestions and whether the
    user liked or passed on each one.
 2. Their current location, local time, and (if available) the weather.
-3. A numbered list of REAL, currently-open, nearby places — already
-   confirmed to exist and to be within the user's distance range. This
-   list is ground truth, not a suggestion for you to second-guess.
+3. A numbered list of REAL, currently-open places that fit within the
+   user's selected distance range — already confirmed to exist and to be
+   within that range. Each entry states its own real, measured distance —
+   trust that number exactly as given, not as a rough hint. The range may
+   be wide: a request with a large distance limit will include candidates
+   from a few hundred meters away up to the full limit, and a candidate
+   near the far end is exactly as valid a pick as one nearby if it's the
+   better match. This list is ground truth, not a suggestion for you to
+   second-guess.
 
 Study the History section for patterns — repeated likes suggest what to lean
 into, repeated passes suggest what to avoid — but don't just repeat past
@@ -51,9 +58,13 @@ hitting an exact count.
 
 The list order carries no meaning — it is not sorted by preference,
 distance, or quality. Read the entire list before selecting. Do not
-default to whichever candidates happen to appear first; give genuine,
-independent consideration to every option, including ones farther down the
-list, and select based on fit with the user's taste, not position.
+default to whichever candidates happen to appear first, and do not
+default to whichever candidates happen to be closest, either — a wide
+distance range exists because the user chose it, so treat farther options
+within that range as fully legitimate, not as a fallback for when nothing
+closer is good enough. Give genuine, independent consideration to every
+option and select based on fit with the user's taste, not position or
+proximity.
 
 Respond with ONLY a JSON object (no markdown fences, no commentary) matching
 exactly this shape:
