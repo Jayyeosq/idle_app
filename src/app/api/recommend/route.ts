@@ -60,6 +60,11 @@ export async function POST(req: NextRequest) {
   const label = parsed.data.label ?? geocodeResult.label;
   const userCountryCode = geocodeResult.countryCode;
 
+  // TEMPORARY DIAGNOSTIC — remove once cross-border filtering is
+  // confirmed working. Shows directly whether the user's own country
+  // resolved at all, separate from whether anything got dropped.
+  console.info(`[recommend] userCountryCode=${userCountryCode ?? "null"}, ${candidates.length} candidates before border filter`);
+
   // A straight-line distance can be technically "within range" while
   // crossing an international border — a much bigger ask than the same
   // distance domestically (different currency, passport/customs, phone

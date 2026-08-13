@@ -367,9 +367,17 @@ export async function searchNearbyPlaces(
     ? `${candidates[0].distanceKm.toFixed(1)}–${candidates[candidates.length - 1].distanceKm.toFixed(1)}km`
     : "n/a";
   const batchSummary = batchJobs.map((job, i) => `${job.label}=${perBatchNewCount[i] ?? 0} new`).join(", ");
+  // TEMPORARY DIAGNOSTIC — remove once cross-border filtering is
+  // confirmed working. Shows whether addressComponents/countryCode is
+  // actually populated on candidates at all — if this is 0, Google isn't
+  // returning it despite being in the field mask (echoing the same
+  // flakiness seen earlier with Text Search and the photos field).
+  const withCountry = candidates.filter((c) => c.countryCode !== null).length;
+  const countrySample = candidates.slice(0, 5).map((c) => `${c.name}=${c.countryCode ?? "null"}`).join(", ");
   console.info(
     `[places] ${candidates.length} total candidates, range ${distanceRange}, requested radius ${radiusKm}km — ${batchSummary}`
   );
+  console.info(`[places] ${withCountry}/${candidates.length} candidates have a resolved country code. Sample: ${countrySample}`);
 
   return candidates;
 }
