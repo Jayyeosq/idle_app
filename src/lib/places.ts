@@ -266,15 +266,19 @@ export async function searchNearbyPlaces(
 
   const seenIds = new Set<string>();
   const candidates: PlaceCandidate[] = [];
+  const perBatchNewCount: number[] = [];
 
   for (const places of batches) {
+    let newInThisBatch = 0;
     for (const p of places) {
       if (!p.id || seenIds.has(p.id)) continue; // dedupe across the two calls
       const candidate = toCandidate(apiKey, lat, lon, p);
       if (!candidate) continue;
       seenIds.add(p.id);
       candidates.push(candidate);
+      newInThisBatch++;
     }
+    perBatchNewCount.push(newInThisBatch);
   }
 
   // Sorted nearest-first for a sensible reading order in the LLM's
@@ -282,6 +286,17 @@ export async function searchNearbyPlaces(
   // distance would throw away exactly the farther popularity-sourced
   // results this whole blend exists to add.
   candidates.sort((a, b) => a.distanceKm - b.distanceKm);
+
+  const distanceRange = candidates.length
+    ? `${candidates[0].distanceKm.toFixed(1)}–${candidates[candidates.length - 1].distanceKm.toFixed(1)}km`
+    : "n/a";
+  const batchSummary =
+    radiusKm > WIDE_RADIUS_THRESHOLD_KM
+      ? `DISTANCE batch contributed ${perBatchNewCount[0] ?? 0} new, POPULARITY batch contributed ${perBatchNewCount[1] ?? 0} new`
+      : `single DISTANCE batch (radius ${radiusKm}km ≤ ${WIDE_RADIUS_THRESHOLD_KM}km threshold)`;
+  console.info(
+    `[places] ${candidates.length} total candidates, range ${distanceRange}, requested radius ${radiusKm}km — ${batchSummary}`
+  );
 
   return candidates;
 }

@@ -49,6 +49,12 @@ candidates from the list instead. If fewer than ${count} candidates are a
 good fit, select fewer rather than forcing a weak match — quality over
 hitting an exact count.
 
+The list order carries no meaning — it is not sorted by preference,
+distance, or quality. Read the entire list before selecting. Do not
+default to whichever candidates happen to appear first; give genuine,
+independent consideration to every option, including ones farther down the
+list, and select based on fit with the user's taste, not position.
+
 Respond with ONLY a JSON object (no markdown fences, no commentary) matching
 exactly this shape:
 
@@ -74,6 +80,25 @@ function formatCandidateList(candidates: PlaceCandidate[]): string {
     .join("\n");
 }
 
+/**
+ * Fisher-Yates shuffle. Candidates arrive from lib/places.ts sorted
+ * nearest-first, which is useful for the wide-radius POPULARITY blend's
+ * diagnostics but is exactly the wrong order to hand an LLM: models have a
+ * well-documented tendency to over-favor items near the top of a list, so
+ * a strictly nearest-first prompt list can systematically starve out
+ * farther candidates regardless of how good a match they'd be — even ones
+ * a wide distance filter specifically worked to include. Shuffling breaks
+ * that positional bias.
+ */
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 export async function selectRecommendations(opts: {
   profileMarkdown: string;
   location: LocationInfo;
@@ -90,6 +115,12 @@ export async function selectRecommendations(opts: {
     return [];
   }
 
+  // Shuffled once, reused for both the prompt's numbering and the final
+  // number-to-candidate lookup below — same array, so a selection's
+  // number always resolves to the same place the model saw at that
+  // position.
+  const candidates = shuffle(opts.candidates);
+
   const model = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 
   const weatherLine = opts.weather
@@ -99,7 +130,7 @@ export async function selectRecommendations(opts: {
   const f = opts.filters;
   // Never ask for more than the pool actually has — avoids the model
   // being forced to pad out weak selections just to hit a count.
-  const count = Math.min(f?.count ?? 5, opts.candidates.length);
+  const count = Math.min(f?.count ?? 5, candidates.length);
 
   const filterLines: string[] = [];
   if (f?.interests?.length) filterLines.push(`Interests: ${f.interests.join(", ")}`);
@@ -121,7 +152,7 @@ ${opts.profileMarkdown}
 ${filterBlock}
 ## Nearby real places to choose from
 
-${formatCandidateList(opts.candidates)}
+${formatCandidateList(candidates)}
 
 Select and personalize ${count} of the above for this user right now.`;
 
@@ -171,7 +202,7 @@ Select and personalize ${count} of the above for this user right now.`;
   const recommendations: Recommendation[] = [];
   for (const sel of result.data.selections) {
     if (seen.has(sel.number)) continue;
-    const candidate = opts.candidates[sel.number - 1];
+    const candidate = candidates[sel.number - 1];
     if (!candidate) continue;
     seen.add(sel.number);
 
