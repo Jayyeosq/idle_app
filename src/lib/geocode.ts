@@ -25,9 +25,15 @@ export async function reverseGeocode(lat: number, lon: number): Promise<GeocodeR
       headers: { "User-Agent": `idle-app (${contact})` },
       cache: "no-store",
     });
-    if (!res.ok) throw new Error(`Nominatim returned ${res.status}`);
+    if (!res.ok) {
+      console.error(`[geocode] Nominatim reverse failed (${res.status}) for ${lat},${lon}:`, await res.text());
+      return { label: "your location", countryCode: null };
+    }
     const data = await res.json();
     const addr = data.address ?? {};
+    if (!addr.country_code) {
+      console.error(`[geocode] Nominatim response had no country_code for ${lat},${lon}. Raw address:`, JSON.stringify(addr));
+    }
     const place =
       addr.neighbourhood || addr.suburb || addr.town || addr.village || addr.city_district;
     const city = addr.city || addr.town || addr.county;
@@ -35,7 +41,8 @@ export async function reverseGeocode(lat: number, lon: number): Promise<GeocodeR
     const label = [place, city, country].filter(Boolean).join(", ") || data.display_name || "your location";
     const countryCode = typeof addr.country_code === "string" ? addr.country_code.toUpperCase() : null;
     return { label, countryCode };
-  } catch {
+  } catch (err) {
+    console.error(`[geocode] reverseGeocode threw for ${lat},${lon}:`, err);
     return { label: "your location", countryCode: null };
   }
 }
