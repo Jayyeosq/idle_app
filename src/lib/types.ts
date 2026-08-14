@@ -63,5 +63,11 @@ export type RecommendationFilters = {
   budget?: "$" | "$$" | "$$$";
   pace?: "chill" | "balanced" | "packed";
   maxDistanceKm?: number;
+  // Defaults to true (undefined treated as enabled) so existing behavior
+  // is unchanged unless explicitly turned off. When false, distance is
+  // not applied as a constraint at all — search covers the whole country
+  // instead (see COUNTRY_WIDE_RADIUS_KM in lib/constants.ts), and
+  // maxDistanceKm is ignored.
+  distanceEnabled?: boolean;
   count?: 3 | 5 | 8;
 };

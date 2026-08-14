@@ -6,7 +6,7 @@ import { reverseGeocode } from "@/lib/geocode";
 import { getCurrentWeather } from "@/lib/weather";
 import { selectRecommendations } from "@/lib/llm";
 import { searchNearbyPlaces } from "@/lib/places";
-import { DEFAULT_MAX_DISTANCE_KM } from "@/lib/constants";
+import { DEFAULT_MAX_DISTANCE_KM, COUNTRY_WIDE_RADIUS_KM } from "@/lib/constants";
 import { nanoid } from "nanoid";
 
 const FiltersSchema = z
@@ -15,6 +15,7 @@ const FiltersSchema = z
     budget: z.enum(["$", "$$", "$$$"]).optional(),
     pace: z.enum(["chill", "balanced", "packed"]).optional(),
     maxDistanceKm: z.number().positive().optional(),
+    distanceEnabled: z.boolean().optional(),
     count: z.union([z.literal(3), z.literal(5), z.literal(8)]).optional(),
   })
   .optional();
@@ -45,7 +46,15 @@ export async function POST(req: NextRequest) {
   }
 
   const { lat, lon, filters } = parsed.data;
-  const maxDistanceKm = filters?.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM;
+  // undefined/true = normal distance-bounded search. false = distance
+  // isn't applied as a constraint at all — search covers the whole
+  // country instead. The real "same country" boundary in that mode is
+  // enforced below by the country-code filter, not by this radius number;
+  // COUNTRY_WIDE_RADIUS_KM just needs to be large enough to reach a
+  // country's edges from wherever the user is (see its own doc comment
+  // for the honest limitation on very large countries).
+  const distanceEnabled = filters?.distanceEnabled ?? true;
+  const maxDistanceKm = distanceEnabled ? filters?.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM : COUNTRY_WIDE_RADIUS_KM;
 
   // All three run in parallel — reverseGeocode is always called now (even
   // when the client already supplied a label) specifically to get a
@@ -60,34 +69,25 @@ export async function POST(req: NextRequest) {
   const label = parsed.data.label ?? geocodeResult.label;
   const userCountryCode = geocodeResult.countryCode;
 
-  // TEMPORARY DIAGNOSTIC — remove once cross-border filtering is
-  // confirmed working. Shows directly whether the user's own country
-  // resolved at all, separate from whether anything got dropped.
-  console.info(`[recommend] userCountryCode=${userCountryCode ?? "null"}, label="${geocodeResult.label}", ${candidates.length} candidates before border filter`);
-
   // A straight-line distance can be technically "within range" while
   // crossing an international border — a much bigger ask than the same
   // distance domestically (different currency, passport/customs, phone
-  // roaming). Only enforced when both the user's and a candidate's
-  // country are confirmed; unknown on either side fails open rather than
-  // dropping a possibly-valid result, same philosophy as the closed-venue
-  // filter in lib/places.ts.
+  // roaming). This is also the ONLY real boundary enforced when distance
+  // is toggled off, so it always runs regardless of distanceEnabled. Only
+  // enforced when both the user's and a candidate's country are
+  // confirmed; unknown on either side fails open rather than dropping a
+  // possibly-valid result, same philosophy as the closed-venue filter in
+  // lib/places.ts.
   const inCountryCandidates = userCountryCode
     ? candidates.filter((c) => !c.countryCode || c.countryCode === userCountryCode)
     : candidates;
 
-  const droppedCrossBorder = candidates.length - inCountryCandidates.length;
-  if (droppedCrossBorder > 0) {
-    console.info(
-      `[recommend] Dropped ${droppedCrossBorder} cross-border candidate(s) — user country ${userCountryCode}.`
-    );
-  }
-
   if (inCountryCandidates.length === 0) {
     return NextResponse.json(
       {
-        error:
-          "Couldn't find any nearby places within that distance right now. Try widening your distance filter.",
+        error: distanceEnabled
+          ? "Couldn't find any nearby places within that distance right now. Try widening your distance filter."
+          : "Couldn't find any places to recommend right now. Try again in a moment.",
       },
       { status: 502 }
     );
@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
       localTime,
       weather,
       filters,
+      distanceEnabled,
       candidates: inCountryCandidates,
     });
   } catch (err: any) {

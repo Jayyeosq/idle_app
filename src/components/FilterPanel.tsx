@@ -20,6 +20,8 @@ export default function FilterPanel({
   disabled?: boolean;
   onSubmit: () => void;
 }) {
+  const distanceEnabled = value.distanceEnabled ?? true;
+
   function toggleInterest(tag: string) {
     const current = value.interests ?? [];
     const next = current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag];
@@ -31,6 +33,7 @@ export default function FilterPanel({
     (value.budget ? 1 : 0) +
     (value.pace ? 1 : 0) +
     (value.maxDistanceKm ? 1 : 0) +
+    (value.distanceEnabled === false ? 1 : 0) +
     (value.count ? 1 : 0);
 
   return (
@@ -135,22 +138,50 @@ export default function FilterPanel({
             </div>
           </div>
 
-          <div className="min-w-[140px]">
-            <label htmlFor="filter-radius" className="block text-xs text-mist mb-2">
-              Max distance{" "}
-              <span className="text-ink">
-                {value.maxDistanceKm ? `${value.maxDistanceKm} km` : `${DEFAULT_MAX_DISTANCE_KM} km (default)`}
-              </span>
-            </label>
-            <input
-              id="filter-radius"
-              type="range"
-              min={1}
-              max={50}
-              value={value.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM}
-              onChange={(e) => onChange({ ...value, maxDistanceKm: Number(e.target.value) })}
-              className="w-full accent-ink"
-            />
+          <div className="min-w-[160px]">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-mist">Distance</p>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={distanceEnabled}
+                aria-label="Toggle distance filter"
+                onClick={() => onChange({ ...value, distanceEnabled: !distanceEnabled })}
+                className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
+                  distanceEnabled ? "bg-sage" : "bg-ink/15"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-card transition-transform ${
+                    distanceEnabled ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {distanceEnabled ? (
+              <>
+                <label htmlFor="filter-radius" className="block text-xs text-mist mb-2">
+                  Max distance{" "}
+                  <span className="text-ink">
+                    {value.maxDistanceKm ? `${value.maxDistanceKm} km` : `${DEFAULT_MAX_DISTANCE_KM} km (default)`}
+                  </span>
+                </label>
+                <input
+                  id="filter-radius"
+                  type="range"
+                  min={1}
+                  max={50}
+                  value={value.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM}
+                  onChange={(e) => onChange({ ...value, maxDistanceKm: Number(e.target.value) })}
+                  className="w-full accent-ink"
+                />
+              </>
+            ) : (
+              <p className="text-xs text-ink-soft leading-relaxed">
+                Off — searching your whole country, based on taste only.
+              </p>
+            )}
           </div>
         </div>
       </fieldset>

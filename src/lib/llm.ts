@@ -130,6 +130,7 @@ export async function selectRecommendations(opts: {
   localTime: string;
   weather: WeatherInfo | null;
   filters?: RecommendationFilters;
+  distanceEnabled: boolean;
   candidates: PlaceCandidate[];
 }): Promise<Recommendation[]> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
@@ -161,6 +162,18 @@ export async function selectRecommendations(opts: {
   if (f?.interests?.length) filterLines.push(`Interests: ${f.interests.join(", ")}`);
   if (f?.budget) filterLines.push(`Budget: ${f.budget}`);
   if (f?.pace) filterLines.push(`Pace: ${f.pace}`);
+  // Distance was never mentioned here at all when enabled — it's already
+  // enforced structurally by which candidates made it into the list, not
+  // by a prompt instruction. But when the user has explicitly turned
+  // distance off, that's worth stating outright, so the model doesn't
+  // fall back to unconsciously favoring closer options out of habit —
+  // every candidate is already confirmed same-country; that's the only
+  // boundary this request has.
+  if (!opts.distanceEnabled) {
+    filterLines.push(
+      "Distance is turned off for this request — candidates span the whole country, not a nearby radius. Do not use proximity as a factor at all; select purely on taste and profile fit, exactly as you would if every candidate were equally close."
+    );
+  }
   const filterBlock = filterLines.length
     ? `\n## Filters for this request only\n\nApply these when selecting, preferring them over the profile's saved\npreferences wherever the two conflict, but do not treat them as a change\nto the user's underlying taste profile:\n\n${filterLines.map((l) => `- ${l}`).join("\n")}\n`
     : "";
@@ -175,7 +188,7 @@ ${opts.profileMarkdown}
 - Local time: ${opts.localTime}
 - Weather: ${weatherLine}
 ${filterBlock}
-## Nearby real places to choose from
+## ${opts.distanceEnabled ? "Nearby" : "Real"} places to choose from
 
 ${formatCandidateList(candidates)}
 
