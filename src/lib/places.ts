@@ -328,22 +328,44 @@ export async function searchNearbyPlaces(
     return [];
   }
 
+  // Google's Nearby Search (New) hard limit — "The radius must be between
+  // 0.0 and 50000.0, inclusive" per their own docs. Values above this are
+  // rejected outright, not clamped — a request built with a larger radius
+  // simply fails. This bit us directly: COUNTRY_WIDE_RADIUS_KM (150) was
+  // being sent straight through as the primary batch's own search radius,
+  // which silently failed every single time distance was toggled off,
+  // leaving genuinely nearby real places completely absent from the pool
+  // (confirmed by a real request logging "primary=0 new" and every
+  // surviving candidate coming from 56km+ away).
+  const GOOGLE_MAX_RADIUS_KM = 50;
+
   const isWide = radiusKm > WIDE_RADIUS_THRESHOLD_KM;
 
-  // Primary batch: always centered on the user's real location, covering
-  // the full requested radius — this naturally supplies whatever's
-  // genuinely closest, regardless of how the seed batches below turn out.
+  // Primary batch: always centered on the user's real location. Its own
+  // API-call radius is capped at Google's real maximum regardless of how
+  // large radiusKm is — radiusKm itself still governs seed placement and
+  // the final distance filter below uncapped, so a wide/country-wide
+  // request still reaches its full range via the seed batches; only the
+  // primary call's own request radius needs the cap.
   const batchJobs: {
     centerLat: number;
     centerLon: number;
     searchRadiusKm: number;
     rankPreference: "DISTANCE" | "POPULARITY";
     label: string;
-  }[] = [{ centerLat: lat, centerLon: lon, searchRadiusKm: radiusKm, rankPreference: "DISTANCE", label: "primary" }];
+  }[] = [
+    {
+      centerLat: lat,
+      centerLon: lon,
+      searchRadiusKm: Math.min(radiusKm, GOOGLE_MAX_RADIUS_KM),
+      rankPreference: "DISTANCE",
+      label: "primary",
+    },
+  ];
 
   if (isWide) {
     const seedDistanceKm = radiusKm * 0.65;
-    const seedRadiusKm = Math.min(radiusKm * 0.45, 45); // stay safely under Google's own per-call radius cap
+    const seedRadiusKm = Math.min(radiusKm * 0.45, GOOGLE_MAX_RADIUS_KM - 5); // stay safely under Google's own per-call radius cap
     for (const bearing of SEED_BEARINGS_DEG) {
       const { lat: seedLat, lon: seedLon } = destinationPoint(lat, lon, bearing, seedDistanceKm);
       // POPULARITY here, not DISTANCE — a seed's own DISTANCE-ranked
