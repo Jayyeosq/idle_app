@@ -117,6 +117,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // TEMPORARY DIAGNOSTIC — remove once this is confirmed working. Shows
+  // exactly what got selected and its real distance, and confirms
+  // distanceEnabled actually reached this point correctly — separates
+  // "the toggle isn't reaching the server" from "the server has it right
+  // but the model still picked near ones anyway."
+  console.info(
+    `[recommend] distanceEnabled=${distanceEnabled}, pool had ${inCountryCandidates.length} candidates spanning up to ${Math.max(...inCountryCandidates.map((c) => c.distanceKm)).toFixed(1)}km — selected: ${recommendations.map((r) => `${r.name} (${r.distanceHint})`).join(" | ")}`
+  );
+
   const sessionId = nanoid(6);
   await appendRecommendationSession(
     session.userId,
