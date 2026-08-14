@@ -91,10 +91,15 @@ exactly this shape:
 }`;
 }
 
-function formatCandidateList(candidates: PlaceCandidate[]): string {
+function formatCandidateList(candidates: PlaceCandidate[], distanceEnabled: boolean): string {
   return candidates
     .map((c, i) => {
-      const bits = [c.category, c.distanceHint];
+      // Distance is omitted entirely when off, not just instructed away —
+      // a number sitting on every line is a much stronger pull than a
+      // sentence telling the model to disregard it. Same lesson learned
+      // earlier this session with the "nearby" wording bias: remove the
+      // signal, don't just tell the model not to use it.
+      const bits = distanceEnabled ? [c.category, c.distanceHint] : [c.category];
       if (c.rating !== null) {
         const reviews = c.ratingCount !== null ? ` from ${c.ratingCount} reviews` : "";
         bits.push(`${c.rating.toFixed(1)}★${reviews}`);
@@ -190,7 +195,7 @@ ${opts.profileMarkdown}
 ${filterBlock}
 ## ${opts.distanceEnabled ? "Nearby" : "Real"} places to choose from
 
-${formatCandidateList(candidates)}
+${formatCandidateList(candidates, opts.distanceEnabled)}
 
 Select and personalize ${count} of the above for this user right now.`;
 
