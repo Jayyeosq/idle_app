@@ -364,8 +364,19 @@ export async function searchNearbyPlaces(
   ];
 
   if (isWide) {
-    const seedDistanceKm = radiusKm * 0.65;
-    const seedRadiusKm = Math.min(radiusKm * 0.45, GOOGLE_MAX_RADIUS_KM - 5); // stay safely under Google's own per-call radius cap
+    // Capped the same way seedRadiusKm already is — NOT scaled unbounded
+    // with radiusKm. This was a real bug: for country-wide mode
+    // (radiusKm = COUNTRY_WIDE_RADIUS_KM = 150), the old
+    // "radiusKm * 0.65" placed every seed ~97.5km from the user. For a
+    // physically small country like Singapore (under 50km across at its
+    // widest), that guarantees every single seed lands in a neighboring
+    // country or open water — so every seed-sourced candidate got
+    // correctly dropped by the cross-border filter, leaving only the
+    // primary near-user batch and making "distance off" look identical
+    // to "distance on, tiny radius." Confirmed by a real request: pool
+    // collapsed from 176 candidates down to 19, all within 0.3km.
+    const seedDistanceKm = Math.min(radiusKm * 0.4, 30); // conservative on center placement — see below
+    const seedRadiusKm = Math.min(radiusKm * 0.45, GOOGLE_MAX_RADIUS_KM - 5); // wide search radius from that closer center
     for (const bearing of SEED_BEARINGS_DEG) {
       const { lat: seedLat, lon: seedLon } = destinationPoint(lat, lon, bearing, seedDistanceKm);
       // POPULARITY here, not DISTANCE — a seed's own DISTANCE-ranked
