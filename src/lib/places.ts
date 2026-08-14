@@ -256,13 +256,16 @@ function toCandidate(apiKey: string, lat: number, lon: number, p: any): PlaceCan
 // wider radius — see searchNearbyPlaces below for why.
 const WIDE_RADIUS_THRESHOLD_KM = 10;
 
-// Compass bearings for seed search centers, evenly spaced. 4 rather than
-// a denser ring keeps the extra API cost bounded — each one is a full
-// Nearby Search call. Some directions inevitably land somewhere sparse
-// (open water, a border) for any given user location; that's an accepted
+// Compass bearings for seed search centers. 8 directions (45° apart)
+// rather than 4 gives much finer coverage of whatever direction actually
+// holds a city's dense/notable area, which for any given user is rarely
+// exactly due N/E/S/W. Costs more API calls per wide-radius request, but
+// coarser spacing was concretely observed missing real, notable places
+// (see below). Some directions still inevitably land somewhere sparse
+// (open water, a border) for any given user location — an accepted
 // limitation of a general-purpose approach that has to work anywhere, not
 // something tuned per city.
-const SEED_BEARINGS_DEG = [0, 90, 180, 270];
+const SEED_BEARINGS_DEG = [0, 45, 90, 135, 180, 225, 270, 315];
 
 /**
  * Fetches real, open, nearby venues within radiusKm of the given
@@ -289,12 +292,22 @@ const SEED_BEARINGS_DEG = [0, 90, 180, 270];
  * The only thing that actually reaches the outer part of a wide radius is
  * moving the query CENTER itself. So for a wide radius, additional calls
  * are made centered at points genuinely far from the user — placed at
- * SEED_BEARINGS_DEG around a ring at roughly 65% of the requested radius,
- * each with its own smaller local radius sized to give adjacent seeds
- * some overlap. Every result is then re-measured against the user's TRUE
- * coordinates (not the seed's) and dropped if it's actually outside the
- * requested radius — a seed's own local circle can extend slightly beyond
- * the user's real radius, so this keeps the final guarantee exact.
+ * SEED_BEARINGS_DEG (8 directions) around a ring at roughly 65% of the
+ * requested radius, each with its own smaller local radius sized to give
+ * adjacent seeds some overlap. Seed batches are ranked by POPULARITY, not
+ * DISTANCE: a seed's own DISTANCE-ranked results tended to be whatever's
+ * immediately closest to that exact point (generic nearby shops), not the
+ * actually notable places somewhere in that general area — POPULARITY,
+ * scoped to a point already placed far from the user, does stay
+ * concentrated near ITS OWN center (confirmed earlier when this same
+ * behavior defeated an attempt to use POPULARITY from the user's own
+ * location), but that's now useful instead of the problem, since it means
+ * results cluster around each seed's specific area while surfacing what's
+ * genuinely well-known there. Every result is then re-measured against
+ * the user's TRUE coordinates (not the seed's) and dropped if it's
+ * actually outside the requested radius — a seed's own local circle can
+ * extend slightly beyond the user's real radius, so this keeps the final
+ * guarantee exact.
  *
  * Each candidate carries its own countryCode (ISO 3166-1 alpha-2). This
  * function doesn't filter by it — that happens in the API route, after
@@ -320,21 +333,39 @@ export async function searchNearbyPlaces(
   // Primary batch: always centered on the user's real location, covering
   // the full requested radius — this naturally supplies whatever's
   // genuinely closest, regardless of how the seed batches below turn out.
-  const batchJobs: { centerLat: number; centerLon: number; searchRadiusKm: number; label: string }[] = [
-    { centerLat: lat, centerLon: lon, searchRadiusKm: radiusKm, label: "primary" },
-  ];
+  const batchJobs: {
+    centerLat: number;
+    centerLon: number;
+    searchRadiusKm: number;
+    rankPreference: "DISTANCE" | "POPULARITY";
+    label: string;
+  }[] = [{ centerLat: lat, centerLon: lon, searchRadiusKm: radiusKm, rankPreference: "DISTANCE", label: "primary" }];
 
   if (isWide) {
     const seedDistanceKm = radiusKm * 0.65;
     const seedRadiusKm = Math.min(radiusKm * 0.45, 45); // stay safely under Google's own per-call radius cap
     for (const bearing of SEED_BEARINGS_DEG) {
       const { lat: seedLat, lon: seedLon } = destinationPoint(lat, lon, bearing, seedDistanceKm);
-      batchJobs.push({ centerLat: seedLat, centerLon: seedLon, searchRadiusKm: seedRadiusKm, label: `seed@${bearing}°` });
+      // POPULARITY here, not DISTANCE — a seed's own DISTANCE-ranked
+      // results tended to be whatever's immediately closest to that exact
+      // point (often generic nearby shops), not the actually notable
+      // places somewhere in that general area. POPULARITY, scoped to a
+      // seed already placed far from the user, surfaces what's genuinely
+      // well-known near that point instead.
+      batchJobs.push({
+        centerLat: seedLat,
+        centerLon: seedLon,
+        searchRadiusKm: seedRadiusKm,
+        rankPreference: "POPULARITY",
+        label: `seed@${bearing}°`,
+      });
     }
   }
 
   const batches = await Promise.all(
-    batchJobs.map((job) => fetchNearbyBatch(apiKey, job.centerLat, job.centerLon, job.searchRadiusKm, "DISTANCE"))
+    batchJobs.map((job) =>
+      fetchNearbyBatch(apiKey, job.centerLat, job.centerLon, job.searchRadiusKm, job.rankPreference)
+    )
   );
 
   const seenIds = new Set<string>();
