@@ -10,6 +10,7 @@ export const INTEREST_OPTIONS = [
   "live music",
   "quiet / rest",
   "family-friendly",
+  "kids",
   "hidden gems",
 ] as const;
 

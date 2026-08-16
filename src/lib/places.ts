@@ -48,8 +48,8 @@ export type PlaceCandidate = {
 };
 
 // A broad spread across the app's usual interest categories (food, nature,
-// art, nightlife, shopping, fitness, family-friendly, quiet/rest) so one
-// call returns a genuinely varied pool rather than skewing toward one
+// art, nightlife, shopping, fitness, family-friendly, kids, quiet/rest) so
+// one call returns a genuinely varied pool rather than skewing toward one
 // category. Nearby Search (New) accepts up to 50 types in a single
 // request and returns places matching ANY of them — no need for one call
 // per type. See Table A: https://developers.google.com/maps/documentation/places/web-service/place-types
@@ -72,6 +72,9 @@ const CANDIDATE_TYPES = [
   "aquarium",
   "movie_theater",
   "library",
+  "playground",
+  "amusement_center",
+  "childrens_camp",
 ];
 
 // Maps Google's place types down to this app's short category vocabulary
@@ -96,6 +99,13 @@ const TYPE_TO_CATEGORY: Record<string, string> = {
   aquarium: "family-friendly",
   movie_theater: "nightlife",
   library: "quiet / rest",
+  // Kept distinct from "family-friendly" above — these are specifically
+  // kid-focused (a playground or kids' camp isn't really an adult
+  // activity), whereas amusement_park/zoo/aquarium genuinely appeal to
+  // the whole family together.
+  playground: "kids",
+  amusement_center: "kids",
+  childrens_camp: "kids",
 };
 
 function categoryFor(primaryType?: string, types?: string[]): string {
