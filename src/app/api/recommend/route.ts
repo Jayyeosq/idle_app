@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/session";
-import { readProfile, appendRecommendationSession } from "@/lib/profile";
+import { readProfile, appendRecommendationSession, parsePreferences } from "@/lib/profile";
 import { reverseGeocode } from "@/lib/geocode";
 import { getCurrentWeather } from "@/lib/weather";
 import { selectRecommendations } from "@/lib/llm";
@@ -56,6 +56,15 @@ export async function POST(req: NextRequest) {
   const distanceEnabled = filters?.distanceEnabled ?? true;
   const maxDistanceKm = distanceEnabled ? filters?.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM : COUNTRY_WIDE_RADIUS_KM;
 
+  // Session filter takes priority (same "prefer this request's filters
+  // over the saved profile" pattern used elsewhere), falling back to
+  // whatever's saved in the profile if this request didn't set any —
+  // this is what actually lets interests shape the SEARCH itself now,
+  // not just the LLM's selection from a generic pool afterward.
+  const effectiveInterests = filters?.interests?.length
+    ? filters.interests
+    : parsePreferences(profileMarkdown)?.interests;
+
   // All three run in parallel — reverseGeocode is always called now (even
   // when the client already supplied a label) specifically to get a
   // reliable country code for the cross-border filter below, without
@@ -63,7 +72,7 @@ export async function POST(req: NextRequest) {
   const [geocodeResult, weather, candidates] = await Promise.all([
     reverseGeocode(lat, lon),
     getCurrentWeather(lat, lon),
-    searchNearbyPlaces(lat, lon, maxDistanceKm),
+    searchNearbyPlaces(lat, lon, maxDistanceKm, effectiveInterests),
   ]);
 
   const label = parsed.data.label ?? geocodeResult.label;

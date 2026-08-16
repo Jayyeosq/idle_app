@@ -79,26 +79,73 @@ const CANDIDATE_TYPES = [
 
 // Maps Google's place types down to this app's short category vocabulary
 // (matching the style of lib/constants.ts's INTEREST_OPTIONS) — derived
-// from real data instead of asking the LLM to invent a label.
+// from real data instead of asking the LLM to invent a label. Covers
+// every type in INTEREST_TO_TYPES below, not just CANDIDATE_TYPES — a
+// venue found via an interest-targeted search still needs an accurate
+// label, not the generic "activity" fallback. A few types intentionally
+// search under two interests (e.g. wildlife_park under both "nature" and
+// "family-friendly") but can only have one canonical display category
+// here — a judgment call about which fits best, not an error.
 const TYPE_TO_CATEGORY: Record<string, string> = {
   restaurant: "food",
   cafe: "food",
   bakery: "food",
+  food_court: "food",
   bar: "nightlife",
   night_club: "nightlife",
+  comedy_club: "nightlife",
+  karaoke: "nightlife",
+  dance_hall: "nightlife",
+  live_music_venue: "live music",
+  concert_hall: "live music",
   park: "nature",
+  hiking_area: "nature",
+  botanical_garden: "nature",
+  dog_park: "nature",
+  national_park: "nature",
+  state_park: "nature",
+  nature_preserve: "nature",
+  wildlife_park: "nature",
+  wildlife_refuge: "nature",
+  scenic_spot: "nature",
+  garden: "nature",
+  picnic_ground: "nature",
   tourist_attraction: "sightseeing",
   museum: "art & culture",
   art_gallery: "art & culture",
+  art_museum: "art & culture",
+  history_museum: "art & culture",
+  cultural_center: "art & culture",
+  cultural_landmark: "art & culture",
+  historical_landmark: "art & culture",
+  historical_place: "art & culture",
+  performing_arts_theater: "art & culture",
+  opera_house: "art & culture",
+  philharmonic_hall: "art & culture",
+  planetarium: "art & culture",
+  monument: "art & culture",
   shopping_mall: "shopping",
   book_store: "shopping",
+  market: "shopping",
+  flea_market: "shopping",
   gym: "fitness",
+  fitness_center: "fitness",
+  yoga_studio: "fitness",
+  sports_complex: "fitness",
+  swimming_pool: "fitness",
+  ice_skating_rink: "fitness",
+  cycling_park: "fitness",
   spa: "quiet / rest",
+  library: "quiet / rest",
+  sauna: "quiet / rest",
+  massage_spa: "quiet / rest",
+  wellness_center: "quiet / rest",
   amusement_park: "family-friendly",
   zoo: "family-friendly",
   aquarium: "family-friendly",
+  water_park: "family-friendly",
+  ferris_wheel: "family-friendly",
   movie_theater: "nightlife",
-  library: "quiet / rest",
   // Kept distinct from "family-friendly" above — these are specifically
   // kid-focused (a playground or kids' camp isn't really an adult
   // activity), whereas amusement_park/zoo/aquarium genuinely appeal to
@@ -106,7 +153,88 @@ const TYPE_TO_CATEGORY: Record<string, string> = {
   playground: "kids",
   amusement_center: "kids",
   childrens_camp: "kids",
+  indoor_playground: "kids",
+  video_arcade: "kids",
+  miniature_golf_course: "kids",
+  toy_store: "kids",
 };
+
+// The other direction: which real Google types to search for when a user
+// has selected a given interest (from lib/constants.ts's
+// INTEREST_OPTIONS). This is what makes interests actually shape the
+// search itself, not just the LLM's selection afterward — previously
+// every request searched the same fixed CANDIDATE_TYPES regardless of
+// interest, so e.g. selecting "live music" had zero effect on what
+// actually got found; the LLM could only recommend one by accident, via
+// a bar/night_club generically labeled "nightlife." Every type below is
+// verified against Google's current official Table A
+// (developers.google.com/maps/documentation/places/web-service/place-types),
+// fetched directly rather than assumed, after an earlier third-party
+// summary turned out to be missing a much better match (live_music_venue,
+// added in Google's Feb 2026 release — an exact hit instead of the rough
+// concert_hall/bar approximation this table used at first).
+const INTEREST_TO_TYPES: Record<string, string[]> = {
+  food: ["restaurant", "cafe", "bakery", "food_court"],
+  nature: [
+    "park",
+    "hiking_area",
+    "botanical_garden",
+    "dog_park",
+    "national_park",
+    "state_park",
+    "nature_preserve",
+    "wildlife_park",
+    "wildlife_refuge",
+    "scenic_spot",
+    "garden",
+    "picnic_ground",
+  ],
+  "art & culture": [
+    "museum",
+    "art_gallery",
+    "cultural_center",
+    "historical_landmark",
+    "art_museum",
+    "history_museum",
+    "performing_arts_theater",
+    "opera_house",
+    "philharmonic_hall",
+    "planetarium",
+    "monument",
+    "cultural_landmark",
+    "historical_place",
+  ],
+  nightlife: ["bar", "night_club", "comedy_club", "karaoke", "dance_hall"],
+  "live music": ["live_music_venue", "concert_hall", "philharmonic_hall", "opera_house", "bar", "night_club"],
+  shopping: ["shopping_mall", "book_store", "market", "flea_market"],
+  fitness: ["gym", "fitness_center", "yoga_studio", "sports_complex", "swimming_pool", "ice_skating_rink", "cycling_park"],
+  "quiet / rest": ["spa", "library", "sauna", "massage_spa", "wellness_center"],
+  "family-friendly": ["amusement_park", "zoo", "aquarium", "water_park", "wildlife_park", "ferris_wheel"],
+  kids: ["playground", "amusement_center", "childrens_camp", "indoor_playground", "video_arcade", "miniature_golf_course", "toy_store"],
+  // "hidden gems" has no Google type of its own — "less famous, still
+  // good" isn't a place category, it's a judgment call about a specific
+  // venue (low review count but high rating, say). That's inherently a
+  // selection-time job for the LLM, not something a type filter can
+  // express — deliberately left out of this table rather than mapped to
+  // something misleading.
+};
+
+/**
+ * Builds the type list to actually search for, given a user's selected
+ * interests. Falls back to the full generic CANDIDATE_TYPES list when no
+ * interests are given (or none of them map to real types), preserving the
+ * original broad-net behavior for anyone who hasn't specified a
+ * preference — this is additive, not a replacement for the LLM's own
+ * selection-time personalization.
+ */
+function typesForInterests(interests?: string[]): string[] {
+  if (!interests?.length) return CANDIDATE_TYPES;
+  const mapped = new Set<string>();
+  for (const interest of interests) {
+    for (const type of INTEREST_TO_TYPES[interest] ?? []) mapped.add(type);
+  }
+  return mapped.size ? Array.from(mapped) : CANDIDATE_TYPES;
+}
 
 function categoryFor(primaryType?: string, types?: string[]): string {
   if (primaryType && TYPE_TO_CATEGORY[primaryType]) return TYPE_TO_CATEGORY[primaryType];
@@ -191,7 +319,8 @@ async function fetchNearbyBatch(
   lat: number,
   lon: number,
   radiusKm: number,
-  rankPreference: "DISTANCE" | "POPULARITY"
+  rankPreference: "DISTANCE" | "POPULARITY",
+  includedTypes: string[]
 ): Promise<any[]> {
   try {
     const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
@@ -203,7 +332,7 @@ async function fetchNearbyBatch(
           "places.id,places.displayName,places.primaryType,places.types,places.photos,places.googleMapsUri,places.businessStatus,places.location,places.rating,places.userRatingCount,places.priceLevel,places.addressComponents",
       },
       body: JSON.stringify({
-        includedTypes: CANDIDATE_TYPES,
+        includedTypes,
         maxResultCount: 20,
         rankPreference,
         locationRestriction: {
@@ -330,13 +459,19 @@ const SEED_BEARINGS_DEG = [0, 45, 90, 135, 180, 225, 270, 315];
 export async function searchNearbyPlaces(
   lat: number,
   lon: number,
-  radiusKm: number
+  radiusKm: number,
+  interests?: string[]
 ): Promise<PlaceCandidate[]> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) {
     console.error("[places] GOOGLE_PLACES_API_KEY is not set — no candidates available.");
     return [];
   }
+
+  // Computed once and reused for every batch (primary + all seeds) — an
+  // interest-targeted search only helps if it's applied consistently
+  // across the whole pool, not just the near-user portion of it.
+  const includedTypes = typesForInterests(interests);
 
   // Google's Nearby Search (New) hard limit — "The radius must be between
   // 0.0 and 50000.0, inclusive" per their own docs. Values above this are
@@ -407,7 +542,7 @@ export async function searchNearbyPlaces(
 
   const batches = await Promise.all(
     batchJobs.map((job) =>
-      fetchNearbyBatch(apiKey, job.centerLat, job.centerLon, job.searchRadiusKm, job.rankPreference)
+      fetchNearbyBatch(apiKey, job.centerLat, job.centerLon, job.searchRadiusKm, job.rankPreference, includedTypes)
     )
   );
 
@@ -450,8 +585,12 @@ export async function searchNearbyPlaces(
   // flakiness seen earlier with Text Search and the photos field).
   const withCountry = candidates.filter((c) => c.countryCode !== null).length;
   const countrySample = candidates.slice(0, 5).map((c) => `${c.name}=${c.countryCode ?? "null"}`).join(", ");
+  const typesNote =
+    includedTypes === CANDIDATE_TYPES
+      ? "generic search (no interests set)"
+      : `targeted to interests [${interests?.join(", ")}] — ${includedTypes.length} types`;
   console.info(
-    `[places] ${candidates.length} total candidates, range ${distanceRange}, requested radius ${radiusKm}km — ${batchSummary}`
+    `[places] ${candidates.length} total candidates, range ${distanceRange}, requested radius ${radiusKm}km — ${batchSummary} — ${typesNote}`
   );
   console.info(`[places] ${withCountry}/${candidates.length} candidates have a resolved country code. Sample: ${countrySample}`);
 
